@@ -1,0 +1,37 @@
+# ========================================
+# MACROS ДЛЯ ИНТЕРАКТИВНОГО РЕЖИМА
+# ========================================
+# Геометрия задаётся один раз до /run/initialize
+# (через макрос, сгенерированный program_b.html)
+
+# 1. Открываем визуализатор
+/vis/open
+
+# 2. Настройка вида
+/vis/viewer/set/viewpointThetaPhi 60 30 deg
+/vis/viewer/zoom 1.0
+/vis/viewer/set/style wireframe
+/vis/viewer/set/auxiliaryEdge true
+
+# 3. Рисуем геометрию
+/vis/drawVolume
+
+# 4. Настройка траекторий
+/vis/scene/add/trajectories smooth
+/vis/scene/add/hits
+/vis/scene/endOfEventAction accumulate
+
+# 5. Настройка цвета цилиндра (синий)
+/vis/geometry/set/colour Cylinder 0 0 0 1 1
+
+# 6. Обновляем вид
+/vis/viewer/flush
+
+# 7. Подсказка
+/control/verbose 2
+/control/alias echo "========================================"
+/control/alias echo "  ИНТЕРАКТИВНЫЙ РЕЖИМ"
+/control/alias echo "  Геометрия задаётся в макросе до /run/initialize"
+/control/alias echo "  Для пакетного запуска используйте program_b.html"
+/control/alias echo "  Для запуска: /run/beamOn <число>"
+/control/alias echo "========================================"

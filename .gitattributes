@@ -1,0 +1,6 @@
+# Normalize line endings: files checked out as CRLF on Windows (default),
+# stored as LF in the repository.
+* text=auto
+
+# Batch files must keep CRLF to run correctly on Windows.
+*.bat text eol=crlf

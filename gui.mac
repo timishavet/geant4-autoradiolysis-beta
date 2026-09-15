@@ -1,0 +1,107 @@
+#
+# GUI MENU FOR RADIOLYSIS SIMULATION
+# =================================
+#
+# Geometry commands must be issued BEFORE /run/initialize
+# (use the "Run -> Initialize" button after configuring geometry).
+
+# ========================================
+# 1. FILE MENU
+# ========================================
+/gui/addMenu file File
+/gui/addButton file "Quit" exit
+
+# ========================================
+# 2. RUN MENU
+# ========================================
+/gui/addMenu run Run
+/gui/addButton run "Run 15 events" "/run/beamOn 15"
+/gui/addButton run "Run 1000 events" "/run/beamOn 1000"
+/gui/addButton run "Initialize" "/run/initialize"
+
+# ========================================
+# 3. SOURCE MENU (set before /run/initialize)
+# ========================================
+/gui/addMenu source Source
+/gui/addButton source "Lu-177 (Z=71, A=177)" "/mySource/setRadionuclide 71 177"
+/gui/addButton source "I-131  (Z=53, A=131)" "/mySource/setRadionuclide 53 131"
+/gui/addButton source "Co-60  (Z=27, A=60)" "/mySource/setRadionuclide 27 60"
+/gui/addButton source "Y-90   (Z=39, A=90)" "/mySource/setRadionuclide 39 90"
+/gui/addButton source "Tc-99m (Z=43, A=99)" "/mySource/setRadionuclide 43 99 142.6836"
+
+# ========================================
+# 4. GEOMETRY MENU (set before /run/initialize)
+# ========================================
+/gui/addMenu geometry Geometry
+
+# --- Variant ---------------------------------------------------------
+/gui/addButton geometry "Variant: Cylinder" "/myDetector/setGeometry cylinder"
+/gui/addButton geometry "Variant: Beaker" "/myDetector/setGeometry beaker"
+/gui/addButton geometry "Variant: Test tube" "/myDetector/setGeometry tube"
+
+# --- Height (half-height) --------------------------------------------
+/gui/addButton geometry "Height 1 cm" "/myDetector/setHalfHeight 0.5 cm"
+/gui/addButton geometry "Height 2 cm" "/myDetector/setHalfHeight 1 cm"
+/gui/addButton geometry "Height 3 cm" "/myDetector/setHalfHeight 1.5 cm"
+/gui/addButton geometry "Height 4 cm" "/myDetector/setHalfHeight 2 cm"
+/gui/addButton geometry "Height 5 cm" "/myDetector/setHalfHeight 2.5 cm"
+
+# --- Radius ----------------------------------------------------------
+/gui/addButton geometry "Radius 0.5 cm" "/myDetector/setRadius 0.5 cm"
+/gui/addButton geometry "Radius 1 cm" "/myDetector/setRadius 1 cm"
+/gui/addButton geometry "Radius 2 cm" "/myDetector/setRadius 2 cm"
+/gui/addButton geometry "Radius 3 cm" "/myDetector/setRadius 3 cm"
+/gui/addButton geometry "Radius 5 cm" "/myDetector/setRadius 5 cm"
+
+# --- Glass wall thickness (beaker / tube only) -----------------------
+/gui/addButton geometry "Wall 1.0 mm" "/myDetector/setGlassWall 1.0 mm"
+/gui/addButton geometry "Wall 1.5 mm" "/myDetector/setGlassWall 1.5 mm"
+/gui/addButton geometry "Wall 2.0 mm" "/myDetector/setGlassWall 2.0 mm"
+/gui/addButton geometry "Wall 3.0 mm" "/myDetector/setGlassWall 3.0 mm"
+
+# --- Dry rim above the liquid (beaker / tube only) -------------------
+/gui/addButton geometry "Rim 0 mm" "/myDetector/setRim 0 mm"
+/gui/addButton geometry "Rim 5 mm" "/myDetector/setRim 5 mm"
+/gui/addButton geometry "Rim 10 mm" "/myDetector/setRim 10 mm"
+/gui/addButton geometry "Rim 20 mm" "/myDetector/setRim 20 mm"
+
+# --- Glass material (beaker / tube only) -----------------------------
+/gui/addButton geometry "Glass: Quartz SiO2" "/myDetector/setGlassMaterial G4_SILICON_DIOXIDE"
+/gui/addButton geometry "Glass: Pyrex" "/myDetector/setGlassMaterial G4_PYREX_GLASS"
+
+# ========================================
+# 5. VIEWER MENU
+# ========================================
+/gui/addMenu viewer Viewer
+/gui/addButton viewer "Style: Wireframe" "/vis/viewer/set/style wireframe"
+/gui/addButton viewer "Auxiliary Edges" "/vis/viewer/set/auxiliaryEdge true"
+/gui/addButton viewer "Style: Surface" "/vis/viewer/set/style surface"
+/gui/addButton viewer "Style: Cloud" "/vis/viewer/set/style cloud"
+/gui/addButton viewer "Refresh view" "/vis/viewer/refresh"
+/gui/addButton viewer "Rebuild view" "/vis/viewer/rebuild"
+/gui/addButton viewer "Update axes" "/myDetector/drawAxes"
+/gui/addButton viewer "Flush viewer" "/vis/viewer/flush"
+/gui/addButton viewer "Reset view" "/vis/viewer/reset"
+
+# ========================================
+# 6. TRAJECTORIES MENU
+# ========================================
+/gui/addMenu trajectories Trajectories
+/gui/addButton trajectories "Show trajectories" "/vis/scene/add/trajectories smooth"
+/gui/addButton trajectories "Hide trajectories" "/vis/scene/remove/trajectories"
+/gui/addButton trajectories "Clear trajectories" "/vis/scene/endOfEventAction refresh"
+/gui/addButton trajectories "Accumulate trajectories" "/vis/scene/endOfEventAction accumulate"
+
+# ========================================
+# 7. VIEWPOINT MENU
+# ========================================
+/gui/addMenu viewpoint Viewpoint
+/gui/addButton viewpoint "Front (X)" "/vis/viewer/set/viewpointThetaPhi 90 0 deg"
+/gui/addButton viewpoint "Front (Y)" "/vis/viewer/set/viewpointThetaPhi 0 0 deg"
+/gui/addButton viewpoint "Side (Z)" "/vis/viewer/set/viewpointThetaPhi 90 90 deg"
+/gui/addButton viewpoint "Top" "/vis/viewer/set/viewpointThetaPhi 0 0 deg"
+/gui/addButton viewpoint "3D view 1" "/vis/viewer/set/viewpointThetaPhi 45 45 deg"
+/gui/addButton viewpoint "3D view 2" "/vis/viewer/set/viewpointThetaPhi 60 30 deg"
+/gui/addButton viewpoint "Zoom in" "/vis/viewer/zoom 1.2"
+/gui/addButton viewpoint "Zoom out" "/vis/viewer/zoom 0.8"
+/gui/addButton viewpoint "Reset view" "/vis/viewer/reset"
