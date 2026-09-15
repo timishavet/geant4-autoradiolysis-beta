@@ -11,10 +11,10 @@
 
 ## Сборка
 
-Требуется Geant4 11.4 (с геометрией, физикой, визуализацией) и CMake.
+Требуется Geant4 11.4 (с геометрией, физикой, визуализацией) и CMake. Укажите путь к установке Geant4 через `Geant4_DIR` (пример — для Windows):
 
 ```bash
-cmake -DGeant4_DIR=F:/Geant4-11.4/lib/cmake/Geant4 . -B build
+cmake -DGeant4_DIR=<путь_к_Geant4>/lib/cmake/Geant4 . -B build
 cmake --build build --config Release --target main
 ```
 
