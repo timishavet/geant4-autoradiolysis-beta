@@ -986,6 +986,15 @@ class ProgramB(tk.Tk):
             total = self._sim_total
             seen = self._sim_max_seen
             pct = min(100.0, seen * 100.0 / total) if total > 0 else 0.0
+            if seen == 0:
+                # Still initializing (physics tables, geometry, first event):
+                # show a "working" label instead of a frozen-looking 0%.
+                dots = "." * ((int(time.monotonic() * 2) % 3) + 1)
+                self.progress_bar["value"] = 0.0
+                self.progress_label.config(
+                    text=f"Инициализация{dots}   (запуск симуляции)")
+                self.after(300, self._poll_progress)
+                return
             elapsed = time.monotonic() - self._sim_start
             eta_label = ""
             if seen > 0 and total > 0:
