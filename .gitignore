@@ -8,14 +8,3 @@ __pycache__/
 
 # Simulation output
 results.txt
-
-# Local / private files
-Geant4 Documentation/
-*.xlsx
-
-# Not part of the repo contents
-MYCYLINDER4_SUMMARY.md
-check_geant4_decay_data.py
-program_b.html
-run.mac
-run_simulation.bat
