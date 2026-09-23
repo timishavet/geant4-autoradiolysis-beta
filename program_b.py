@@ -34,9 +34,9 @@ GLASS_MATERIALS = [
 ]
 
 GEOMETRY_VARIANTS = [
-    {"token":"cylinder","label":"Простой цилиндр"},
-    {"token":"beaker",  "label":"Цилиндр в стакане"},
-    {"token":"tube",    "label":"Пробирка (сферическое дно)"},
+    {"token":"cylinder","label":"Цилиндр"},
+    {"token":"beaker",  "label":"Стакан"},
+    {"token":"tube",    "label":"Пробирка"},
 ]
 
 OUTPUT_FIELDS = [
@@ -135,11 +135,11 @@ class ProgramB(tk.Tk):
         self.page_misc     = ttk.Frame(self.notebook)
 
         self.notebook.add(self.page_geometry,       text="  Геометрия  ")
-        self.notebook.add(self.page_medium,         text="  Среда и материалы  ")
+        self.notebook.add(self.page_medium,         text="  Среда и корпус  ")
         self.notebook.add(self.page_radionuclide,   text="  Радионуклид  ")
         self.notebook.add(self.page_decay,          text="  Распад  ")
         self.notebook.add(self.page_output,         text="  Получаемые значения  ")
-        self.notebook.add(self.page_misc,           text="  Проч.  ")
+        self.notebook.add(self.page_misc,           text="  Запуск и вывод  ")
 
         self._build_geometry_page()
         self._build_medium_page()
@@ -436,7 +436,7 @@ class ProgramB(tk.Tk):
 
         ttk.Label(lf_out, text="Снимите галочку с поля, чтобы оно не попало в вывод.\nВ макрос добавляются команды /myOutput/disable <id> для снятых полей.", wraplength=600, justify="left").pack(fill="x", padx=4, pady=8)
 
-    # --- ПРОЧ. ---
+    # --- ЗАПУСК И ВЫВОД ---
     def _build_misc_page(self):
         f = self.page_misc
 
