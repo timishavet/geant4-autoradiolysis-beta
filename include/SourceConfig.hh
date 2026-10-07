@@ -18,11 +18,13 @@ public:
 
     void SetRadionuclide(G4int Z, G4int A, G4double excitationEnergy = 0.0);
     void SetActivity(G4double activityBq);
+    void SetIrrTime(G4double irrTimeS);
 
     G4int    GetZ()          const { return fZ; }
     G4int    GetA()          const { return fA; }
     G4double GetExcitation() const { return fExcitation; }
     G4double GetActivity()   const { return fActivity; }
+    G4double GetIrrTime()    const { return fIrrTime; }
 
     /// Human-readable name ("Lu-177") for the currently set Z,A. Falls back
     /// to "Z-A" notation if not in the curated list.
@@ -35,6 +37,7 @@ private:
     G4int    fA;           // default 177
     G4double fExcitation;  // default 0.0 (ground state)
     G4double fActivity;    // default 0.0 (Bq); informational only
+    G4double fIrrTime;     // default 0.0 (s); irradiation time, informational only
 };
 
 #endif

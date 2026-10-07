@@ -50,7 +50,8 @@ OUTPUT_FIELDS = [
     {"id":"rim",                "label":"Сухой бортик над жидкостью (см)",            "group":"geometry",    "def":True},
     {"id":"glass_material",     "label":"Материал оболочки",                          "group":"geometry",    "def":True},
     {"id":"radionuclide",       "label":"Радионуклид (Z, A, имя)",                    "group":"radionuclide","def":True},
-    {"id":"activity",           "label":"Активность источника (Бк)",                  "group":"radionuclide","def":False},
+    {"id":"activity",           "label":"Активность источника (Бк)",                  "group":"radionuclide","def":True},
+    {"id":"irr_time",           "label":"Время облучения (с)",                        "group":"radionuclide","def":True},
     {"id":"num_events",         "label":"Число распадов",                             "group":"results",     "def":True},
     {"id":"edep_energy",        "label":"Поглощённая энергия (МэВ) — Path A",         "group":"results",     "def":True},
     {"id":"edep_dose",          "label":"Поглощённая доза (Гр) — Path A",             "group":"results",     "def":True},
@@ -100,6 +101,143 @@ def format_number(value):
     return s
 
 # ============================================================
+# GEANT4 DECAY DATA (half-life + decay scheme)
+# Paths ONLY from environment (per-machine). No hardcoded fallbacks.
+# ============================================================
+
+NMAX_EVENTS = 2147483647
+ACTIVITY_UNITS = {"Бк":1.0, "кБк":1e3, "МБк":1e6, "ГБк":1e9, "мКи":3.7e7, "Ки":3.7e10}
+TIME_UNITS = {"с":1.0, "мин":60.0, "ч":3600.0, "сут":86400.0}
+DECAY_MODES = ["По числу распадов", "По активности и времени"]
+EXC_TOL_KEV = 1.0
+
+_MODE_TARGETS = {
+    "BetaMinus": lambda z, a: (z + 1, a),
+    "BetaPlus":  lambda z, a: (z - 1, a),
+    "KshellEC":  lambda z, a: (z - 1, a),
+    "LshellEC":  lambda z, a: (z - 1, a),
+    "Alpha":     lambda z, a: (z - 2, a - 4),
+    "IT":        lambda z, a: (z, a),
+}
+
+_RD_AVAIL_CACHE = {"dir": None, "set": None}
+_PE_AVAIL_CACHE = {"dir": None, "set": None}
+
+def get_geant4_data_dirs():
+    rd = os.environ.get("G4RADIOACTIVEDATA", "")
+    pe = os.environ.get("G4LEVELGAMMADATA", "")
+    rd = rd if rd and os.path.isdir(rd) else None
+    pe = pe if pe and os.path.isdir(pe) else None
+    return rd, pe
+
+def _list_isotopes_cached(path, cache):
+    if path is None:
+        return set()
+    if cache["dir"] == path and cache["set"] is not None:
+        return cache["set"]
+    names = set()
+    try:
+        for fn in os.listdir(path):
+            if len(fn) > 1 and fn[0] == "z" and ".a" in fn:
+                try:
+                    zpart, apart = fn[1:].split(".a")
+                    names.add((int(zpart), int(apart)))
+                except ValueError:
+                    continue
+    except OSError:
+        return set()
+    cache["dir"] = path
+    cache["set"] = names
+    return names
+
+def parse_halflife_seconds(z, a, exc_kev=0.0):
+    """Returns (state, halflife_s). state: ok | no_base | no_nuclide."""
+    rd_dir, _ = get_geant4_data_dirs()
+    if rd_dir is None:
+        return ("no_base", None)
+    path = os.path.join(rd_dir, f"z{z}.a{a}")
+    if not os.path.isfile(path):
+        return ("no_nuclide", None)
+    best = None
+    try:
+        f = open(path, encoding="utf-8", errors="replace")
+    except OSError:
+        return ("no_nuclide", None)
+    with f:
+        for line in f:
+            parts = line.split()
+            if len(parts) < 4 or parts[0] != "P":
+                continue
+            try:
+                exc = float(parts[1])
+                hl = float(parts[3])
+            except ValueError:
+                continue
+            if abs(exc - exc_kev) <= EXC_TOL_KEV:
+                return ("ok", hl)
+            if best is None:
+                best = (exc, hl)
+    return ("no_nuclide", None)
+
+def parse_daughters(z, a):
+    rd_dir, _ = get_geant4_data_dirs()
+    if rd_dir is None:
+        return set()
+    path = os.path.join(rd_dir, f"z{z}.a{a}")
+    daughters = set()
+    try:
+        f = open(path, encoding="utf-8", errors="replace")
+    except OSError:
+        return daughters
+    with f:
+        for line in f:
+            s = line.strip()
+            if not s or s[0] in ("#", "P", "N"):
+                continue
+            mode = s.split()[0]
+            if mode in _MODE_TARGETS:
+                daughters.add(_MODE_TARGETS[mode](z, a))
+    return daughters
+
+def check_nuclide(z, a, exc_kev=0.0):
+    """Full check. Returns dict with keys: state, halflife, daughters, missing_pe."""
+    rd_dir, pe_dir = get_geant4_data_dirs()
+    if rd_dir is None:
+        return {"state": "no_base", "halflife": None, "daughters": set(), "missing_pe": []}
+    rd_avail = _list_isotopes_cached(rd_dir, _RD_AVAIL_CACHE)
+    if (z, a) not in rd_avail:
+        return {"state": "no_nuclide", "halflife": None, "daughters": set(), "missing_pe": []}
+    state, hl = parse_halflife_seconds(z, a, exc_kev)
+    if state != "ok":
+        return {"state": "no_nuclide", "halflife": None, "daughters": set(), "missing_pe": []}
+    daughters = parse_daughters(z, a)
+    missing = []
+    if pe_dir is not None:
+        pe_avail = _list_isotopes_cached(pe_dir, _PE_AVAIL_CACHE)
+        missing = sorted((dz, da) for dz, da in daughters
+                         if (dz, da) not in pe_avail and (dz, da) != (z, a))
+    return {"state": "ok", "halflife": hl, "daughters": daughters, "missing_pe": missing}
+
+def format_halflife_ru(hl_seconds):
+    if hl_seconds is None:
+        return "—"
+    units = [("лет", 365.25*86400.0), ("сут", 86400.0), ("ч", 3600.0), ("мин", 60.0), ("с", 1.0)]
+    for name, k in units:
+        if hl_seconds >= k:
+            return f"{hl_seconds/k:.3f} {name} ({hl_seconds:.1f} с)"
+    return f"{hl_seconds:.3f} с"
+
+def compute_decays_from_activity(a_bq, t_s, hl_s):
+    lam = math.log(2.0) / hl_s
+    x = lam * t_s
+    if x <= 0:
+        return 0
+    n = (a_bq / lam) * (-math.expm1(-x))
+    if n < 0:
+        return 0
+    return int(n)
+
+# ============================================================
 # MAIN APPLICATION
 # ============================================================
 
@@ -118,6 +256,7 @@ class ProgramB(tk.Tk):
         self._populate_radionuclides()
         self._populate_output_checks()
         self._update_geometry()
+        self._update_decay_visibility()
         self._refresh_macro_preview()
 
     # --------------------------------------------------------
@@ -376,10 +515,11 @@ class ProgramB(tk.Tk):
         self.custom_rn_a = tk.StringVar(value="60")
         ttk.Entry(self.custom_rn_frame, textvariable=self.custom_rn_a).grid(row=1, column=1, sticky="ew", padx=4, pady=4)
 
-        ttk.Label(self.custom_rn_frame, text="Если атом с заданными Z и A не найден в базе Geant4,\nпрограмма завершит работу досрочно с записью ошибки в results.txt.", wraplength=500, justify="left").grid(row=2, column=0, columnspan=2, sticky="w", padx=4, pady=8)
+        ttk.Button(self.custom_rn_frame, text="Проверить", command=self._check_custom_nuclide).grid(row=2, column=0, columnspan=2, sticky="ew", padx=4, pady=4)
+        ttk.Label(self.custom_rn_frame, text="Проверка выполняется по файлам Geant4 на этом компьютере.", wraplength=500, justify="left").grid(row=3, column=0, columnspan=2, sticky="w", padx=4, pady=(0,8))
 
-        self.custom_rn_z.trace_add("write", lambda *_: self._refresh_macro_preview())
-        self.custom_rn_a.trace_add("write", lambda *_: self._refresh_macro_preview())
+        self.custom_rn_z.trace_add("write", lambda *_: self._on_custom_rn_typed())
+        self.custom_rn_a.trace_add("write", lambda *_: self._on_custom_rn_typed())
 
         self.rn_desc_frame = ttk.LabelFrame(f, text="Описание")
         self.rn_desc_frame.grid(row=2, column=0, sticky="ew", padx=8, pady=8)
@@ -387,20 +527,80 @@ class ProgramB(tk.Tk):
         ttk.Label(self.rn_desc_frame, textvariable=self.rn_desc_var, wraplength=500, justify="left").pack(fill="x", padx=4, pady=4)
         ttk.Label(self.rn_desc_frame, text="В макрос передаётся: /mySource/setRadionuclide Z A").pack(fill="x", padx=4, pady=(4,8))
 
+        self.rn_data_frame = ttk.LabelFrame(f, text="Данные Geant4")
+        self.rn_data_frame.grid(row=3, column=0, sticky="ew", padx=8, pady=8)
+        self.rn_halflife_var = tk.StringVar(value="T1/2: —")
+        ttk.Label(self.rn_data_frame, textvariable=self.rn_halflife_var, wraplength=600, justify="left").pack(fill="x", padx=4, pady=(4,2))
+        self.rn_status_var = tk.StringVar(value="")
+        self.rn_status_label = ttk.Label(self.rn_data_frame, textvariable=self.rn_status_var, wraplength=600, justify="left")
+        self.rn_status_label.pack(fill="x", padx=4, pady=(2,4))
+
     # --- РАСПАД ---
     def _build_decay_page(self):
         f = self.page_decay
         f.columnconfigure(0, weight=1)
 
-        count_frame = ttk.LabelFrame(f, text="Количество распадов")
-        count_frame.grid(row=0, column=0, sticky="ew", padx=8, pady=8)
-        ttk.Label(count_frame, text="Количество распадов").grid(row=0, column=0, sticky="w", padx=4, pady=4)
-        self.decay_count_var = tk.StringVar(value="1000000")
-        ttk.Entry(count_frame, textvariable=self.decay_count_var).grid(row=0, column=1, sticky="ew", padx=4, pady=4)
-        ttk.Label(count_frame, text="Программа выполнит ровно N событий: /run/beamOn N").grid(row=1, column=0, columnspan=2, sticky="w", padx=4, pady=4)
-        count_frame.columnconfigure(1, weight=1)
+        mode_frame = ttk.LabelFrame(f, text="Режим задания")
+        mode_frame.grid(row=0, column=0, sticky="ew", padx=8, pady=8)
+        mode_frame.columnconfigure(1, weight=1)
+        ttk.Label(mode_frame, text="Режим").grid(row=0, column=0, sticky="w", padx=4, pady=4)
+        self.decay_mode_var = tk.StringVar(value=DECAY_MODES[0])
+        self.decay_mode_combo = ttk.Combobox(mode_frame, textvariable=self.decay_mode_var,
+                                             values=DECAY_MODES, state="readonly")
+        self.decay_mode_combo.grid(row=0, column=1, sticky="ew", padx=4, pady=4)
+        self.decay_mode_combo.bind("<<ComboboxSelected>>", lambda _: self._on_decay_mode_selected())
 
-        self.decay_count_var.trace_add("write", lambda *_: self._refresh_macro_preview())
+        self.count_frame = ttk.LabelFrame(f, text="Количество распадов")
+        self.count_frame.grid(row=1, column=0, sticky="ew", padx=8, pady=8)
+        ttk.Label(self.count_frame, text="Количество распадов").grid(row=0, column=0, sticky="w", padx=4, pady=4)
+        self.decay_count_var = tk.StringVar(value="1000000")
+        ttk.Entry(self.count_frame, textvariable=self.decay_count_var).grid(row=0, column=1, sticky="ew", padx=4, pady=4)
+        ttk.Label(self.count_frame, text="Программа выполнит ровно N событий: /run/beamOn N").grid(row=1, column=0, columnspan=2, sticky="w", padx=4, pady=4)
+        self.count_warn_var = tk.StringVar(value="")
+        ttk.Label(self.count_frame, textvariable=self.count_warn_var, foreground="#B00020", wraplength=600, justify="left").grid(row=2, column=0, columnspan=2, sticky="w", padx=4, pady=4)
+        self.count_frame.columnconfigure(1, weight=1)
+
+        self.act_frame = ttk.LabelFrame(f, text="По активности и времени")
+        self.act_frame.grid(row=2, column=0, sticky="ew", padx=8, pady=8)
+        self.act_frame.columnconfigure(1, weight=1)
+
+        ttk.Label(self.act_frame, text="Активность").grid(row=0, column=0, sticky="w", padx=4, pady=4)
+        af = ttk.Frame(self.act_frame)
+        af.grid(row=0, column=1, sticky="ew", padx=4, pady=4)
+        af.columnconfigure(0, weight=1)
+        self.activity_var = tk.StringVar(value="1")
+        ttk.Entry(af, textvariable=self.activity_var).grid(row=0, column=0, sticky="ew")
+        self.activity_unit_var = tk.StringVar(value="МБк")
+        self.activity_unit_combo = ttk.Combobox(af, textvariable=self.activity_unit_var,
+                                               values=list(ACTIVITY_UNITS.keys()),
+                                               state="readonly", width=7)
+        self.activity_unit_combo.grid(row=0, column=1, padx=(4, 0))
+
+        ttk.Label(self.act_frame, text="Время облучения").grid(row=1, column=0, sticky="w", padx=4, pady=4)
+        tf = ttk.Frame(self.act_frame)
+        tf.grid(row=1, column=1, sticky="ew", padx=4, pady=4)
+        tf.columnconfigure(0, weight=1)
+        self.irrtime_var = tk.StringVar(value="1")
+        ttk.Entry(tf, textvariable=self.irrtime_var).grid(row=0, column=0, sticky="ew")
+        self.irrtime_unit_var = tk.StringVar(value="ч")
+        self.irrtime_unit_combo = ttk.Combobox(tf, textvariable=self.irrtime_unit_var,
+                                              values=list(TIME_UNITS.keys()),
+                                              state="readonly", width=7)
+        self.irrtime_unit_combo.grid(row=0, column=1, padx=(4, 0))
+
+        self.decay_computed_var = tk.StringVar(value="N = —")
+        ttk.Label(self.act_frame, textvariable=self.decay_computed_var, wraplength=600, justify="left").grid(row=2, column=0, columnspan=2, sticky="w", padx=4, pady=4)
+        self.act_halflife_var = tk.StringVar(value="T1/2: —")
+        ttk.Label(self.act_frame, textvariable=self.act_halflife_var, wraplength=600, justify="left").grid(row=3, column=0, columnspan=2, sticky="w", padx=4, pady=4)
+        self.act_warn_var = tk.StringVar(value="")
+        ttk.Label(self.act_frame, textvariable=self.act_warn_var, foreground="#B00020", wraplength=600, justify="left").grid(row=4, column=0, columnspan=2, sticky="w", padx=4, pady=4)
+        ttk.Label(self.act_frame, text="Число событий N вычисляется с учетом распада источника за время облучения.", wraplength=600, justify="left").grid(row=5, column=0, columnspan=2, sticky="w", padx=4, pady=4)
+
+        self.decay_count_var.trace_add("write", lambda *_: (self._update_decay_warnings(), self._refresh_macro_preview()))
+        self.activity_var.trace_add("write", lambda *_: (self._update_decay_warnings(), self._refresh_macro_preview()))
+        self.irrtime_var.trace_add("write", lambda *_: (self._update_decay_warnings(), self._refresh_macro_preview()))
+        self.activity_unit_combo.bind("<<ComboboxSelected>>", lambda _: (self._update_decay_warnings(), self._refresh_macro_preview()))
+        self.irrtime_unit_combo.bind("<<ComboboxSelected>>", lambda _: (self._update_decay_warnings(), self._refresh_macro_preview()))
 
     # --- ПОЛУЧАЕМЫЕ ЗНАЧЕНИЯ ---
     def _build_output_page(self):
@@ -494,6 +694,7 @@ class ProgramB(tk.Tk):
         self._update_radionuclide_info()
 
     def _populate_output_checks(self):
+        self.output_check_widgets = {}
         for w in self.checks_inner.winfo_children():
             w.destroy()
         col = 0
@@ -507,10 +708,13 @@ class ProgramB(tk.Tk):
             for i, f in enumerate(fields):
                 var = tk.BooleanVar(value=f["def"])
                 self.output_checkvars[f["id"]] = var
-                ttk.Checkbutton(inner, text=f["label"], variable=var,
-                                command=self._refresh_macro_preview).grid(row=i//2, column=i%2, sticky="w", padx=4, pady=2)
+                cb = ttk.Checkbutton(inner, text=f["label"], variable=var,
+                                command=self._refresh_macro_preview)
+                cb.grid(row=i//2, column=i%2, sticky="w", padx=4, pady=2)
+                self.output_check_widgets[f["id"]] = cb
             row += 1
         self.checks_inner.columnconfigure(0, weight=1)
+        self._update_output_visibility()
 
     def _check_all(self, state):
         for var in self.output_checkvars.values():
@@ -581,6 +785,7 @@ class ProgramB(tk.Tk):
             self.rn_z_var.set("")
             self.rn_a_var.set("")
             self.rn_name_var.set("custom")
+            self._set_nuclide_status(None)
             return
         self.custom_rn_frame.grid_remove()
         self.rn_desc_frame.grid()
@@ -589,6 +794,266 @@ class ProgramB(tk.Tk):
         self.rn_a_var.set(str(r["A"]))
         self.rn_name_var.set(r["name"])
         self.rn_desc_var.set(r["desc"])
+        self._set_nuclide_status(check_nuclide(r["Z"], r["A"], r.get("exc", 0.0) or 0.0))
+        self._update_decay_warnings()
+
+    def _on_custom_rn_typed(self):
+        self._set_nuclide_status(None, typed=True)
+        self._update_decay_warnings()
+        self._refresh_macro_preview()
+
+    def _check_custom_nuclide(self):
+        try:
+            z = int(self.custom_rn_z.get())
+            a = int(self.custom_rn_a.get())
+        except ValueError:
+            self._set_nuclide_status({"state": "bad_input"})
+            self._update_decay_warnings()
+            self._refresh_macro_preview()
+            return
+        self._set_nuclide_status(check_nuclide(z, a, 0.0))
+        self._update_decay_warnings()
+        self._refresh_macro_preview()
+
+    def _current_nuclide(self):
+        idx = self.rn_combo.current() if hasattr(self, "rn_combo") else 1
+        if idx <= 0:
+            try:
+                z = int(self.custom_rn_z.get())
+                a = int(self.custom_rn_a.get())
+            except ValueError:
+                return None
+            if z < 1 or z > 119 or a < 1:
+                return None
+            return (z, a, 0.0)
+        r = RADIONUCLIDES[idx - 1]
+        return (r["Z"], r["A"], r.get("exc", 0.0) or 0.0)
+
+    def _set_nuclide_status(self, res, typed=False):
+        if not hasattr(self, "rn_status_var"):
+            return
+        if res is None:
+            if typed:
+                self.rn_halflife_var.set("T1/2: —")
+                self.rn_status_var.set("Измените Z/A и нажмите Проверить.")
+            else:
+                self.rn_halflife_var.set("T1/2: —")
+                self.rn_status_var.set("")
+            return
+        st = res.get("state")
+        if st == "no_base":
+            self.rn_halflife_var.set("T1/2: —")
+            self.rn_status_var.set("База Geant4 недоступна (нет G4RADIOACTIVEDATA).")
+        elif st == "bad_input":
+            self.rn_halflife_var.set("T1/2: —")
+            self.rn_status_var.set("Z должен быть 1..119, A положительным целым.")
+        elif st == "no_nuclide":
+            self.rn_halflife_var.set("T1/2: —")
+            self.rn_status_var.set("Данные по радионуклиду не найдены — симуляция недоступна")
+        else:
+            self.rn_halflife_var.set("T1/2: " + format_halflife_ru(res.get("halflife")))
+            miss = res.get("missing_pe") or []
+            if miss:
+                self.rn_status_var.set(f"Схема распада есть. Уровни дочерних отсутствуют: {miss}")
+            else:
+                self.rn_status_var.set("Схема распада есть. Уровни дочерних есть.")
+
+    def _decay_mode(self):
+        try:
+            return self.decay_mode_var.get()
+        except AttributeError:
+            return DECAY_MODES[0]
+
+    def _on_decay_mode_selected(self):
+        mode = self._decay_mode()
+        if mode == DECAY_MODES[1]:
+            if "activity" in self.output_checkvars:
+                self.output_checkvars["activity"].set(True)
+            if "irr_time" in self.output_checkvars:
+                self.output_checkvars["irr_time"].set(True)
+            if "num_events" in self.output_checkvars:
+                self.output_checkvars["num_events"].set(False)
+        else:
+            if "num_events" in self.output_checkvars:
+                self.output_checkvars["num_events"].set(True)
+        self._update_decay_visibility()
+        self._refresh_macro_preview()
+
+    def _update_output_visibility(self):
+        if not hasattr(self, "output_check_widgets"):
+            return
+        show_source_fields = (self._decay_mode() == DECAY_MODES[1])
+        for fid in ("activity", "irr_time"):
+            cb = self.output_check_widgets.get(fid)
+            if cb is None:
+                continue
+            if show_source_fields:
+                cb.grid()
+            else:
+                cb.grid_remove()
+
+    def _update_decay_visibility(self):
+        self._update_output_visibility()
+        mode = self._decay_mode()
+        is_count = (mode == DECAY_MODES[0])
+        if hasattr(self, "count_frame"):
+            if is_count:
+                self.count_frame.grid()
+            else:
+                self.count_frame.grid_remove()
+        if hasattr(self, "act_frame"):
+            if is_count:
+                self.act_frame.grid_remove()
+            else:
+                self.act_frame.grid()
+        self._update_decay_warnings()
+
+    def _parse_activity_time(self):
+        try:
+            a_val = float(self.activity_var.get())
+        except (ValueError, TypeError):
+            return (None, None, "Укажите положительную активность.")
+        try:
+            t_val = float(self.irrtime_var.get())
+        except (ValueError, TypeError):
+            return (None, None, "Укажите положительное время облучения.")
+        if a_val <= 0:
+            return (None, None, "Укажите положительную активность.")
+        if t_val <= 0:
+            return (None, None, "Укажите положительное время облучения.")
+        a_bq = a_val * ACTIVITY_UNITS.get(self.activity_unit_var.get(), 1.0)
+        t_s = t_val * TIME_UNITS.get(self.irrtime_unit_var.get(), 1.0)
+        return (a_bq, t_s, None)
+
+    def _effective_decays(self):
+        """Returns (N_int, info_dict). Raises ValueError on bad input."""
+        if self._decay_mode() == DECAY_MODES[0]:
+            s = format_number(self.decay_count_var.get())
+            if s is None:
+                raise ValueError("Укажите целое число распадов не меньше 1.")
+            try:
+                n = int(float(s))
+            except ValueError:
+                raise ValueError("Укажите целое число распадов не меньше 1.")
+            if n < 1:
+                raise ValueError("Укажите целое число распадов не меньше 1.")
+            if n > NMAX_EVENTS:
+                raise ValueError(f"Число распадов {n} превышает лимит {NMAX_EVENTS}. Уменьшите число распадов.")
+            return (n, {"mode": "count"})
+        nuc = self._current_nuclide()
+        if nuc is None:
+            raise ValueError("Z должен быть целым числом от 1 до 119, A положительным.")
+        z, a, exc = nuc
+        state, hl = parse_halflife_seconds(z, a, exc)
+        if state == "no_base":
+            raise ValueError("База Geant4 недоступна (нет G4RADIOACTIVEDATA).")
+        if state != "ok" or not hl or hl <= 0:
+            raise ValueError("Данные по радионуклиду не найдены — симуляция недоступна")
+        a_bq, t_s, err = self._parse_activity_time()
+        if err:
+            raise ValueError(err)
+        n = compute_decays_from_activity(a_bq, t_s, hl)
+        if n < 1:
+            raise ValueError("При таких активности и времени число распадов меньше 1. Увеличьте активность или время.")
+        if n > NMAX_EVENTS:
+            raise ValueError(f"Число распадов {n} превышает лимит {NMAX_EVENTS}. Уменьшите активность или время.")
+        return (n, {"mode": "activity", "a_bq": a_bq, "t_s": t_s, "hl": hl})
+
+    def _update_decay_warnings(self):
+        if not hasattr(self, "count_warn_var"):
+            return
+        try:
+            s = format_number(self.decay_count_var.get())
+            n = int(float(s)) if s is not None else 0
+        except (ValueError, TypeError):
+            n = 0
+        if n > NMAX_EVENTS:
+            self.count_warn_var.set(f"Число распадов {n} превышает лимит {NMAX_EVENTS}. Уменьшите число распадов.")
+        else:
+            self.count_warn_var.set("")
+        if not hasattr(self, "act_warn_var"):
+            return
+        raw = self._raw_activity_n()
+        if raw is None:
+            n2info = None
+            try:
+                n2, info = self._effective_decays_for_display()
+                self.decay_computed_var.set(f"N = {n2}")
+                self.act_halflife_var.set("T1/2: " + format_halflife_ru(info.get("hl")))
+                self.act_warn_var.set("")
+            except Exception as e:
+                self.decay_computed_var.set("N = —")
+                msg = str(e)
+                if "превышает лимит" in msg:
+                    self.act_warn_var.set(msg)
+                else:
+                    self.act_warn_var.set("")
+                hl_txt = self._halflife_for_display()
+                self.act_halflife_var.set("T1/2: " + hl_txt)
+            return
+        n_raw, hl_raw, err_raw = raw
+        if err_raw is not None:
+            self.decay_computed_var.set("N = —")
+            self.act_warn_var.set("")
+            self.act_halflife_var.set("T1/2: " + self._halflife_for_display())
+            return
+        self.decay_computed_var.set(f"N = {n_raw}")
+        self.act_halflife_var.set("T1/2: " + format_halflife_ru(hl_raw))
+        if n_raw > NMAX_EVENTS:
+            self.act_warn_var.set(f"Число распадов {n_raw} превышает лимит {NMAX_EVENTS}. Уменьшите активность или время.")
+        elif n_raw < 1:
+            self.act_warn_var.set("")
+            self.decay_computed_var.set("N = — (меньше 1: увеличьте активность или время)")
+        else:
+            self.act_warn_var.set("")
+
+    def _raw_activity_n(self):
+        if self._decay_mode() == DECAY_MODES[0]:
+            return None
+        nuc = self._current_nuclide()
+        if nuc is None:
+            return None
+        z, a, exc = nuc
+        state, hl = parse_halflife_seconds(z, a, exc)
+        if state != "ok" or not hl or hl <= 0:
+            return None
+        a_bq, t_s, err = self._parse_activity_time()
+        if err:
+            return (None, hl, err)
+        n = compute_decays_from_activity(a_bq, t_s, hl)
+        return (n, hl, None)
+
+    def _effective_decays_for_display(self):
+        if self._decay_mode() == DECAY_MODES[0]:
+            raise ValueError("count mode")
+        nuc = self._current_nuclide()
+        if nuc is None:
+            raise ValueError("bad nuclide")
+        z, a, exc = nuc
+        state, hl = parse_halflife_seconds(z, a, exc)
+        if state == "no_base":
+            raise ValueError("База Geant4 недоступна (нет G4RADIOACTIVEDATA).")
+        if state != "ok" or not hl or hl <= 0:
+            raise ValueError("Данные по радионуклиду не найдены — симуляция недоступна")
+        a_bq, t_s, err = self._parse_activity_time()
+        if err:
+            raise ValueError(err)
+        n = compute_decays_from_activity(a_bq, t_s, hl)
+        if n > NMAX_EVENTS:
+            raise ValueError(f"Число распадов {n} превышает лимит {NMAX_EVENTS}. Уменьшите активность или время.")
+        return (n, {"hl": hl})
+
+    def _halflife_for_display(self):
+        nuc = self._current_nuclide()
+        if nuc is None:
+            return "—"
+        z, a, exc = nuc
+        state, hl = parse_halflife_seconds(z, a, exc)
+        if state == "no_base":
+            return "база недоступна"
+        if state != "ok" or not hl:
+            return "не найден"
+        return format_halflife_ru(hl)
 
     def _set_max_threads(self):
         import multiprocessing
@@ -678,10 +1143,17 @@ class ProgramB(tk.Tk):
             if glass_density_line:
                 shell_lines.append(glass_density_line)
 
-        dc = format_number(self.decay_count_var.get())
-        if dc is None or float(dc) < 1:
-            raise ValueError("Укажите целое число распадов не меньше 1.")
-        beam_on_n = dc
+        n_events, decay_info = self._effective_decays()
+        beam_on_n = str(n_events)
+        activity_line = ""
+        irrtime_line = ""
+        decay_comment = ""
+        if decay_info.get("mode") == "activity":
+            activity_line = f"/mySource/setActivity {format_number(decay_info['a_bq'])} Bq"
+            irrtime_line = f"/mySource/setIrrTime {format_number(decay_info['t_s'])} s"
+            decay_comment = (f"# Активность: {self.activity_var.get()} {self.activity_unit_var.get()}, "
+                             f"Время: {self.irrtime_var.get()} {self.irrtime_unit_var.get()}, "
+                             f"T1/2: {format_halflife_ru(decay_info['hl'])}")
 
         thread_line = ""
         try:
@@ -692,6 +1164,10 @@ class ProgramB(tk.Tk):
             pass
 
         unchecked = [fid for fid, var in self.output_checkvars.items() if not var.get()]
+        if self._decay_mode() == DECAY_MODES[0]:
+            for fid in ("activity", "irr_time"):
+                if fid in self.output_checkvars and fid not in unchecked:
+                    unchecked.append(fid)
         all_ids = list(self.output_checkvars.keys())
         output_lines = []
         if unchecked and len(unchecked) < len(all_ids):
@@ -708,6 +1184,10 @@ class ProgramB(tk.Tk):
             f"# Вариант:     {self._geometry_label()}",
             "# Сгенерировано: program_b.py",
             "# Дата: " + stamp,
+        ]
+        if decay_comment:
+            lines.append(decay_comment)
+        lines.extend([
             "#",
             "# Запуск:",
             "#   main.exe run.mac",
@@ -716,7 +1196,7 @@ class ProgramB(tk.Tk):
             f"/myDetector/setRadius {format_number(radius_cm)} cm",
             f"/myDetector/setHalfHeight {format_number(height_cm / 2)} cm",
             f"/myDetector/setMaterial {mat_name}",
-        ]
+        ])
         if mat_density_line:
             lines.append(mat_density_line)
         lines.extend(shell_lines)
@@ -724,6 +1204,10 @@ class ProgramB(tk.Tk):
         if rn_exc:
             rn_cmd += f" {format_number(rn_exc)}"
         lines.append(rn_cmd)
+        if activity_line:
+            lines.append(activity_line)
+        if irrtime_line:
+            lines.append(irrtime_line)
         if thread_line:
             lines.append(thread_line)
         lines.extend(output_lines)
@@ -802,7 +1286,12 @@ class ProgramB(tk.Tk):
             "customRnZ": self.custom_rn_z.get(),
             "customRnA": self.custom_rn_a.get(),
             "numThreads": self.num_threads_var.get(),
-            "decay": {"count": self.decay_count_var.get()},
+            "decay": {"count": self.decay_count_var.get(),
+                      "mode": self._decay_mode() if hasattr(self, "decay_mode_var") else DECAY_MODES[0],
+                      "activity": self.activity_var.get() if hasattr(self, "activity_var") else "1",
+                      "activityUnit": self.activity_unit_var.get() if hasattr(self, "activity_unit_var") else "МБк",
+                      "irrTime": self.irrtime_var.get() if hasattr(self, "irrtime_var") else "1",
+                      "irrTimeUnit": self.irrtime_unit_var.get() if hasattr(self, "irrtime_unit_var") else "ч"},
             "output": {fid: var.get() for fid, var in self.output_checkvars.items()},
             "rdmThreshold": True,
         }
@@ -858,6 +1347,20 @@ class ProgramB(tk.Tk):
 
         decay = s.get("decay", {})
         self.decay_count_var.set(decay.get("count", "1000000"))
+        if hasattr(self, "decay_mode_var"):
+            mode = decay.get("mode", DECAY_MODES[0])
+            if mode not in DECAY_MODES:
+                mode = DECAY_MODES[0]
+            self.decay_mode_var.set(mode)
+            self.decay_mode_combo.set(mode)
+        if hasattr(self, "activity_var"):
+            self.activity_var.set(decay.get("activity", "1"))
+            au = decay.get("activityUnit", "МБк")
+            self.activity_unit_var.set(au if au in ACTIVITY_UNITS else "МБк")
+            self.irrtime_var.set(decay.get("irrTime", "1"))
+            tu = decay.get("irrTimeUnit", "ч")
+            self.irrtime_unit_var.set(tu if tu in TIME_UNITS else "ч")
+        self._update_decay_visibility()
 
         output = s.get("output", {})
         if isinstance(output, dict):
@@ -923,7 +1426,8 @@ class ProgramB(tk.Tk):
         with open(os.path.join(script_dir, "run.mac"), "w", encoding="utf-8") as f:
             f.write(text)
         try:
-            self._sim_total = int(float(format_number(self.decay_count_var.get())))
+            n_eff, _ = self._effective_decays()
+            self._sim_total = n_eff
         except Exception:
             self._sim_total = 1
         exe = None

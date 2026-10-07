@@ -43,19 +43,34 @@ SourceMessenger::SourceMessenger()
     fSetActivityCmd = new G4UIcmdWithADoubleAndUnit("/mySource/setActivity", this);
     fSetActivityCmd->SetGuidance("Set source activity (informational; recorded in results)");
     fSetActivityCmd->SetGuidance("Example: /mySource/setActivity 1e6 Bq");
-    fSetActivityCmd->SetGuidance("          /mySource/setActivity 1 MBq");
+    fSetActivityCmd->SetGuidance("          /mySource/setActivity 1000000 Bq");
     fSetActivityCmd->SetParameterName("activity", false);
     fSetActivityCmd->SetRange("activity >= 0.");
     fSetActivityCmd->SetUnitCategory("Activity");
     fSetActivityCmd->SetDefaultUnit("Bq");
     fSetActivityCmd->AvailableForStates(G4State_PreInit, G4State_Idle);
     fSetActivityCmd->SetToBeBroadcasted(false);
+
+    // /mySource/setIrrTime <value> <unit>  (s, min, h, day, ...)
+    // Informational only: recorded in results output so the user can
+    // trace which irradiation time was assumed when computing N = A * t externally.
+    fSetIrrTimeCmd = new G4UIcmdWithADoubleAndUnit("/mySource/setIrrTime", this);
+    fSetIrrTimeCmd->SetGuidance("Set irradiation time (informational; recorded in results)");
+    fSetIrrTimeCmd->SetGuidance("Example: /mySource/setIrrTime 3600 s");
+    fSetIrrTimeCmd->SetGuidance("          /mySource/setIrrTime 1 h");
+    fSetIrrTimeCmd->SetParameterName("irrTime", false);
+    fSetIrrTimeCmd->SetRange("irrTime >= 0.");
+    fSetIrrTimeCmd->SetUnitCategory("Time");
+    fSetIrrTimeCmd->SetDefaultUnit("s");
+    fSetIrrTimeCmd->AvailableForStates(G4State_PreInit, G4State_Idle);
+    fSetIrrTimeCmd->SetToBeBroadcasted(false);
 }
 
 SourceMessenger::~SourceMessenger()
 {
     delete fSetRadionuclideCmd;
     delete fSetActivityCmd;
+    delete fSetIrrTimeCmd;
     delete fDir;
 }
 
@@ -75,5 +90,10 @@ void SourceMessenger::SetNewValue(G4UIcommand* command, G4String newValue)
         const G4double a = fSetActivityCmd->GetNewDoubleValue(newValue);
         SourceConfig::Instance().SetActivity(a);
         G4cout << "Source activity set to: " << a / CLHEP::becquerel << " Bq" << G4endl;
+    }
+    else if (command == fSetIrrTimeCmd) {
+        const G4double t = fSetIrrTimeCmd->GetNewDoubleValue(newValue);
+        SourceConfig::Instance().SetIrrTime(t);
+        G4cout << "Irradiation time set to: " << t / CLHEP::second << " s" << G4endl;
     }
 }

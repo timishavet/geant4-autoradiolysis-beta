@@ -160,6 +160,7 @@ void RunAction::PrintAndSaveResults(const G4Run* run) const
     const G4int    srcA   = src.GetA();
     const G4String srcName = src.GetRadionuclideName();
     const G4double activityBq = src.GetActivity();
+    const G4double irrTimeS = src.GetIrrTime();
 
     // Timestamp.
     auto now = std::chrono::system_clock::now();
@@ -186,6 +187,8 @@ void RunAction::PrintAndSaveResults(const G4Run* run) const
     add(Field::NumEvents,         "Number of decays:    ", std::to_string(nofEvents));
     add(Field::Activity,          "Source activity:     ",
         (activityBq > 0.0 ? FormatValue(activityBq / CLHEP::becquerel, "Bq") : G4String("not set")));
+    add(Field::IrrTime,           "Irradiation time:    ",
+        (irrTimeS > 0.0 ? FormatValue(irrTimeS / CLHEP::second, "s") : G4String("not set")));
     add(Field::GeometryVariant,   "Geometry variant:    ", cfg.GetGeometryName());
     add(Field::Dimensions,        "Cylinder radius:     ", FormatValue(radius / cm, "cm"));
     add(Field::Dimensions,        "Cylinder height:     ", FormatValue((2.0 * halfHeight) / cm, "cm"));

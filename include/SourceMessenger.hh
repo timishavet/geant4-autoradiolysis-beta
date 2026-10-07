@@ -22,6 +22,7 @@ private:
     G4UIdirectory*             fDir;
     G4UIcommand*               fSetRadionuclideCmd;  // Z A [excitation_keV]
     G4UIcmdWithADoubleAndUnit* fSetActivityCmd;
+    G4UIcmdWithADoubleAndUnit* fSetIrrTimeCmd;
 };
 
 #endif

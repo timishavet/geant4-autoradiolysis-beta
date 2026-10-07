@@ -43,7 +43,8 @@ public:
         GeometryVariant,    // variant id string
         WallThickness,      // glass wall thickness (cm)
         Rim,                // dry rim height above the liquid (cm)
-        GlassMaterial       // glass material name + density
+        GlassMaterial,      // glass material name + density
+        IrrTime             // irradiation time (s), informational
     };
 
     static OutputConfig& Instance();

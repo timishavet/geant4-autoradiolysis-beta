@@ -37,6 +37,7 @@ OutputConfig::OutputConfig()
     fFlags[Field::WallThickness]     = true;
     fFlags[Field::Rim]               = true;
     fFlags[Field::GlassMaterial]     = true;
+    fFlags[Field::IrrTime]           = true;
 }
 
 void OutputConfig::Enable(Field f)  { fFlags[f] = true; }
@@ -86,13 +87,14 @@ G4String OutputConfig::FieldName(Field f)
         case Field::WallThickness:     return "wall_thickness";
         case Field::Rim:               return "rim";
         case Field::GlassMaterial:     return "glass_material";
+        case Field::IrrTime:           return "irr_time";
     }
     return "unknown";
 }
 
 G4bool OutputConfig::FieldFromName(const G4String& name, Field& out)
 {
-    for (int i = 0; i <= static_cast<int>(Field::GlassMaterial); ++i) {
+    for (int i = 0; i <= static_cast<int>(Field::IrrTime); ++i) {
         Field f = static_cast<Field>(i);
         if (FieldName(f) == name) {
             out = f;

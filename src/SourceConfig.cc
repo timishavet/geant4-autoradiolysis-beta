@@ -11,7 +11,7 @@ SourceConfig& SourceConfig::Instance()
 }
 
 SourceConfig::SourceConfig()
-    : fZ(71), fA(177), fExcitation(0.0), fActivity(0.0)
+    : fZ(71), fA(177), fExcitation(0.0), fActivity(0.0), fIrrTime(0.0)
 {}
 
 void SourceConfig::SetRadionuclide(G4int Z, G4int A, G4double excitationEnergy)
@@ -24,6 +24,11 @@ void SourceConfig::SetRadionuclide(G4int Z, G4int A, G4double excitationEnergy)
 void SourceConfig::SetActivity(G4double activityBq)
 {
     fActivity = activityBq;
+}
+
+void SourceConfig::SetIrrTime(G4double irrTimeS)
+{
+    fIrrTime = irrTimeS;
 }
 
 G4String SourceConfig::GetRadionuclideName() const
