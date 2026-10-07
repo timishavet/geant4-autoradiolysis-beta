@@ -203,6 +203,10 @@ void RunAction::PrintAndSaveResults(const G4Run* run) const
             cfg.GetGlassMaterialName() + " (" +
             FormatValue(cfg.GetGlassEffectiveDensity() / (g / cm3), "g/cm3") + ")");
     }
+    // Separator between setup info and simulated results. Its position is
+    // captured before the first results field, so it stays correct even
+    // when the user disables some output fields.
+    const std::size_t resultsBegin = lines.size();
     add(Field::EdepEnergy,        "Energy deposit (A):  ", FormatValue(edep / MeV, "MeV"));
     add(Field::EdepDose,          "Absorbed dose (A):   ", FormatValue(doseA / gray, "Gy"));
     add(Field::DecayEnergy,       "Decay energy (B):    ", FormatValue(decayEnergy / MeV, "MeV"));
@@ -211,6 +215,9 @@ void RunAction::PrintAndSaveResults(const G4Run* run) const
     add(Field::PathBDose,         "Absorbed dose (B):   ", FormatValue(doseB / gray, "Gy"));
     add(Field::CrossCheck,        "Cross-check (A-B):   ", FormatValue(diff / MeV, "MeV"));
     add(Field::EnergyPerDecay,    "Energy per decay:    ", FormatValue(energyPerDecay / MeV, "MeV"));
+    if (lines.size() > resultsBegin) {
+        lines.insert(lines.begin() + resultsBegin, {"", "=== Simulation results ==="});
+    }
     add(Field::ThreadingMode,     "Threading mode:      ",
         G4String(out.IsMT() ? "Multi-threaded" : "Single-threaded"));
     add(Field::NumThreads,        "Number of threads:   ", std::to_string(out.GetNumThreads()));

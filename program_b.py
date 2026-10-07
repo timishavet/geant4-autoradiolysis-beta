@@ -235,7 +235,7 @@ def compute_decays_from_activity(a_bq, t_s, hl_s):
     n = (a_bq / lam) * (-math.expm1(-x))
     if n < 0:
         return 0
-    return int(n)
+    return int(n + 0.5)
 
 # ============================================================
 # MAIN APPLICATION
@@ -245,12 +245,13 @@ class ProgramB(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Программа Б — Генератор макросов")
-        self.geometry("1000x720")
-        self.minsize(800, 600)
+        self.geometry("1120x800")
+        self.minsize(960, 680)
 
         self.output_checkvars = {}
         self.rdm_threshold_var = tk.BooleanVar(value=True)
 
+        self._apply_visual_style()
         self._build_ui()
         self._populate_materials()
         self._populate_radionuclides()
@@ -258,6 +259,32 @@ class ProgramB(tk.Tk):
         self._update_geometry()
         self._update_decay_visibility()
         self._refresh_macro_preview()
+
+    # --------------------------------------------------------
+    # VISUAL STYLE (fonts, colors). Behavior is unchanged.
+    # --------------------------------------------------------
+    def _apply_visual_style(self):
+        self.font_base = ("Segoe UI", 11)
+        self.font_bold = ("Segoe UI", 11, "bold")
+        self.font_mono = ("Consolas", 12)
+
+        self.option_add("*TCombobox*Listbox.font", self.font_base)
+
+        style = ttk.Style(self)
+        style.configure("TLabel", font=self.font_base)
+        style.configure("TButton", font=self.font_base, padding=(10, 5))
+        style.configure("TCheckbutton", font=self.font_base)
+        style.configure("TEntry", font=self.font_base)
+        style.configure("TCombobox", font=self.font_base)
+        style.configure("TLabelframe", font=self.font_base)
+        style.configure("TLabelframe.Label", font=self.font_bold)
+        style.configure("TNotebook.Tab", font=self.font_bold, padding=(10, 4))
+
+        style.configure("Hint.TLabel", foreground="#555555")
+        style.configure("Error.TLabel", foreground="#B00020")
+        style.configure("Ok.TLabel", foreground="#1E7E34")
+        style.configure("Warn.TLabel", foreground="#B26A00")
+        style.configure("Mono.TLabel", font=self.font_mono)
 
     # --------------------------------------------------------
     # UI CONSTRUCTION
@@ -289,7 +316,6 @@ class ProgramB(tk.Tk):
 
         bottom = ttk.Frame(self)
         bottom.pack(fill="x", padx=8, pady=8)
-        ttk.Button(bottom, text="Сохранить run.mac в папку программы", command=self._generate_and_save).pack(side="left")
         self.gen_status = ttk.Label(bottom, text="")
         self.gen_status.pack(side="left", padx=10)
 
@@ -530,7 +556,7 @@ class ProgramB(tk.Tk):
         self.rn_data_frame = ttk.LabelFrame(f, text="Данные Geant4")
         self.rn_data_frame.grid(row=3, column=0, sticky="ew", padx=8, pady=8)
         self.rn_halflife_var = tk.StringVar(value="T1/2: —")
-        ttk.Label(self.rn_data_frame, textvariable=self.rn_halflife_var, wraplength=600, justify="left").pack(fill="x", padx=4, pady=(4,2))
+        ttk.Label(self.rn_data_frame, textvariable=self.rn_halflife_var, wraplength=600, justify="left", style="Mono.TLabel").pack(fill="x", padx=4, pady=(4,2))
         self.rn_status_var = tk.StringVar(value="")
         self.rn_status_label = ttk.Label(self.rn_data_frame, textvariable=self.rn_status_var, wraplength=600, justify="left")
         self.rn_status_label.pack(fill="x", padx=4, pady=(2,4))
@@ -589,9 +615,9 @@ class ProgramB(tk.Tk):
         self.irrtime_unit_combo.grid(row=0, column=1, padx=(4, 0))
 
         self.decay_computed_var = tk.StringVar(value="N = —")
-        ttk.Label(self.act_frame, textvariable=self.decay_computed_var, wraplength=600, justify="left").grid(row=2, column=0, columnspan=2, sticky="w", padx=4, pady=4)
+        ttk.Label(self.act_frame, textvariable=self.decay_computed_var, wraplength=600, justify="left", style="Mono.TLabel").grid(row=2, column=0, columnspan=2, sticky="w", padx=4, pady=4)
         self.act_halflife_var = tk.StringVar(value="T1/2: —")
-        ttk.Label(self.act_frame, textvariable=self.act_halflife_var, wraplength=600, justify="left").grid(row=3, column=0, columnspan=2, sticky="w", padx=4, pady=4)
+        ttk.Label(self.act_frame, textvariable=self.act_halflife_var, wraplength=600, justify="left", style="Mono.TLabel").grid(row=3, column=0, columnspan=2, sticky="w", padx=4, pady=4)
         self.act_warn_var = tk.StringVar(value="")
         ttk.Label(self.act_frame, textvariable=self.act_warn_var, foreground="#B00020", wraplength=600, justify="left").grid(row=4, column=0, columnspan=2, sticky="w", padx=4, pady=4)
         ttk.Label(self.act_frame, text="Число событий N вычисляется с учетом распада источника за время облучения.", wraplength=600, justify="left").grid(row=5, column=0, columnspan=2, sticky="w", padx=4, pady=4)
@@ -633,8 +659,30 @@ class ProgramB(tk.Tk):
         self.checks_canvas.configure(yscrollcommand=scrollbar.set)
         self.checks_canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
+        self.checks_canvas.bind("<Enter>", lambda _: self._wheel_on())
+        self.checks_canvas.bind("<Leave>", lambda _: self._wheel_off())
 
         ttk.Label(lf_out, text="Снимите галочку с поля, чтобы оно не попало в вывод.\nВ макрос добавляются команды /myOutput/disable <id> для снятых полей.", wraplength=600, justify="left").pack(fill="x", padx=4, pady=8)
+
+    def _wheel_on(self):
+        self.checks_canvas.bind_all("<MouseWheel>", self._scroll_checks)
+        self.checks_canvas.bind_all("<Button-4>", self._scroll_checks)
+        self.checks_canvas.bind_all("<Button-5>", self._scroll_checks)
+
+    def _wheel_off(self):
+        self.checks_canvas.unbind_all("<MouseWheel>")
+        self.checks_canvas.unbind_all("<Button-4>")
+        self.checks_canvas.unbind_all("<Button-5>")
+
+    def _scroll_checks(self, event):
+        if getattr(event, "num", 0) == 4:
+            self.checks_canvas.yview_scroll(-1, "units")
+        elif getattr(event, "num", 0) == 5:
+            self.checks_canvas.yview_scroll(1, "units")
+        else:
+            delta = getattr(event, "delta", 0)
+            self.checks_canvas.yview_scroll(-1 * int(delta / 120), "units")
+        return "break"
 
     # --- ЗАПУСК И ВЫВОД ---
     def _build_misc_page(self):
@@ -647,6 +695,8 @@ class ProgramB(tk.Tk):
         btn_frame.pack(fill="x", padx=4, pady=(4, 2))
         self.run_button = ttk.Button(btn_frame, text="Запустить симуляцию", command=self._run_simulation)
         self.run_button.pack(side="left", padx=2)
+        self.abort_button = ttk.Button(btn_frame, text="Прервать симуляцию", command=self._abort_simulation, state="disabled")
+        self.abort_button.pack(side="left", padx=2)
         ttk.Button(btn_frame, text="Сохранить .mac", command=self._save_macro_dialog).pack(side="left", padx=2)
 
         progress_frame = ttk.Frame(lf_macro)
@@ -656,7 +706,7 @@ class ProgramB(tk.Tk):
         self.progress_label = ttk.Label(progress_frame, text="Прогресс появится после запуска симуляции.", foreground="#555555")
         self.progress_label.pack(anchor="w", pady=(2, 0))
 
-        self.macro_text = scrolledtext.ScrolledText(lf_macro, height=14, font=("Consolas", 10))
+        self.macro_text = scrolledtext.ScrolledText(lf_macro, height=8, font=self.font_mono)
         self.macro_text.pack(fill="both", expand=True, padx=4, pady=4)
         ttk.Label(
             lf_macro,
@@ -671,7 +721,7 @@ class ProgramB(tk.Tk):
         btn_frame2.pack(fill="x", padx=4, pady=4)
         ttk.Button(btn_frame2, text="Прочитать results.txt", command=self._read_result).pack(side="left", padx=2)
         ttk.Button(btn_frame2, text="Выбрать results.txt", command=self._load_result_file).pack(side="left", padx=2)
-        self.result_text = scrolledtext.ScrolledText(lf_result, height=8, font=("Consolas", 10))
+        self.result_text = scrolledtext.ScrolledText(lf_result, height=14, font=self.font_mono)
         self.result_text.pack(fill="both", expand=True, padx=4, pady=4)
 
     # --------------------------------------------------------
@@ -839,17 +889,21 @@ class ProgramB(tk.Tk):
             else:
                 self.rn_halflife_var.set("T1/2: —")
                 self.rn_status_var.set("")
+            self.rn_status_label.configure(style="TLabel")
             return
         st = res.get("state")
         if st == "no_base":
             self.rn_halflife_var.set("T1/2: —")
             self.rn_status_var.set("База Geant4 недоступна (нет G4RADIOACTIVEDATA).")
+            self.rn_status_label.configure(style="Warn.TLabel")
         elif st == "bad_input":
             self.rn_halflife_var.set("T1/2: —")
             self.rn_status_var.set("Z должен быть 1..119, A положительным целым.")
+            self.rn_status_label.configure(style="Error.TLabel")
         elif st == "no_nuclide":
             self.rn_halflife_var.set("T1/2: —")
             self.rn_status_var.set("Данные по радионуклиду не найдены — симуляция недоступна")
+            self.rn_status_label.configure(style="Error.TLabel")
         else:
             self.rn_halflife_var.set("T1/2: " + format_halflife_ru(res.get("halflife")))
             miss = res.get("missing_pe") or []
@@ -857,6 +911,7 @@ class ProgramB(tk.Tk):
                 self.rn_status_var.set(f"Схема распада есть. Уровни дочерних отсутствуют: {miss}")
             else:
                 self.rn_status_var.set("Схема распада есть. Уровни дочерних есть.")
+            self.rn_status_label.configure(style="Ok.TLabel")
 
     def _decay_mode(self):
         try:
@@ -1384,7 +1439,7 @@ class ProgramB(tk.Tk):
 
     @staticmethod
     def _reverse_result_blocks(txt):
-        parts = re.split(r"(?m)(?=^=== )", txt)
+        parts = re.split(r"(?m)(?=^=== (?:Run|WARNING) @)", txt)
         if len(parts) <= 1:
             return txt
         head, rest = parts[0], parts[1:]
@@ -1445,14 +1500,31 @@ class ProgramB(tk.Tk):
         self._sim_max_seen = 0
         self._sim_start = time.monotonic()
         self._sim_running = True
+        self._sim_aborted = False
+        self._sim_proc = None
         self._sim_rc = None
         self._sim_out = ""
         self._sim_finalized = False
         self.progress_bar["value"] = 0.0
         self.progress_label.config(text="Подготовка симуляции…")
         self.run_button.config(state="disabled", text="Идёт симуляция…")
+        self.abort_button.config(state="normal")
         threading.Thread(target=self._sim_worker, args=(exe, script_dir), daemon=True).start()
         self._poll_progress()
+
+    def _abort_simulation(self):
+        if not getattr(self, "_sim_running", False):
+            return
+        self._sim_aborted = True
+        proc = getattr(self, "_sim_proc", None)
+        if proc is not None:
+            try:
+                if proc.poll() is None:
+                    proc.terminate()
+            except Exception:
+                pass
+        self.progress_label.config(text="Прерывание симуляции…")
+        self.abort_button.config(state="disabled")
 
     def _sim_worker(self, exe, script_dir):
         tail = deque(maxlen=30)
@@ -1467,6 +1539,7 @@ class ProgramB(tk.Tk):
                 encoding="utf-8",
                 errors="replace",
             )
+            self._sim_proc = proc
             for line in iter(proc.stdout.readline, ""):
                 tail.append(line.rstrip("\r\n"))
                 m = re.search(r"Event\s+(\d+)\s+starts", line)
@@ -1481,12 +1554,18 @@ class ProgramB(tk.Tk):
             code, out = -1, "Файл main.exe не найден."
         except Exception as e:
             code, out = -1, str(e)
+        finally:
+            self._sim_proc = None
         self._sim_rc = code
         self._sim_out = out
         self._sim_running = False
 
     def _poll_progress(self):
         if self._sim_running:
+            if getattr(self, "_sim_aborted", False):
+                self.progress_label.config(text="Прерывание симуляции…")
+                self.after(300, self._poll_progress)
+                return
             total = self._sim_total
             seen = self._sim_max_seen
             pct = min(100.0, seen * 100.0 / total) if total > 0 else 0.0
@@ -1515,7 +1594,13 @@ class ProgramB(tk.Tk):
 
     def _sim_finished(self, code, out):
         self._sim_running = False
+        self._sim_proc = None
         self.run_button.config(state="normal", text="Запустить симуляцию")
+        self.abort_button.config(state="disabled")
+        if getattr(self, "_sim_aborted", False):
+            self.progress_bar["value"] = 0.0
+            self.progress_label.config(text="Симуляция прервана пользователем.")
+            return
         self.progress_bar["value"] = 100.0
         self.progress_label.config(text="Симуляция завершена.")
         script_dir = os.path.dirname(os.path.abspath(__file__))
