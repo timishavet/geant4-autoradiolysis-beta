@@ -4,6 +4,7 @@
 #include "SourceConfig.hh"
 #include "OutputConfig.hh"
 #include "DetectorConfig.hh"
+#include "BetaSpectrumConfig.hh"
 
 #include "G4Material.hh"
 #include "G4Run.hh"
@@ -116,6 +117,7 @@ void RunAction::EndOfRunAction(const G4Run* run)
     }
 
     PrintAndSaveResults(run);
+    WriteBetaSpectra(run);
 }
 
 void RunAction::PrintAndSaveResults(const G4Run* run) const
@@ -241,6 +243,79 @@ void RunAction::PrintAndSaveResults(const G4Run* run) const
             outFile << label << value << "\n";
         }
         outFile << "\n";
+        outFile.close();
+    }
+}
+
+void RunAction::WriteBetaSpectra(const G4Run* run) const
+{
+    if (!BetaSpectrumConfig::Instance().IsEnabled()) return;
+    const auto* myRun = static_cast<const MyRun*>(run);
+    if (!myRun) return;
+
+    auto& spec = BetaSpectrumConfig::Instance();
+    auto& src = SourceConfig::Instance();
+    const G4int nofEvents = run->GetNumberOfEvent();
+
+    auto now = std::chrono::system_clock::now();
+    std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+    std::tm tm_local{};
+#if defined(_WIN32)
+    localtime_s(&tm_local, &now_c);
+#else
+    localtime_r(&now_c, &tm_local);
+#endif
+    char ts[32];
+    std::strftime(ts, sizeof(ts), "%Y-%m-%d %H:%M:%S", &tm_local);
+
+    const G4String nuclideInfo =
+        src.GetRadionuclideName() +
+        " (Z=" + std::to_string(src.GetZ()) +
+        ", A=" + std::to_string(src.GetA()) + ")";
+
+    auto writeOne = [&](const G4String& path, const G4String& title,
+                        const std::vector<G4double>& values) {
+        std::ofstream f(path.c_str(), std::ios::out | std::ios::trunc);
+        if (!f.is_open()) {
+            G4cerr << "Beta spectrum: cannot open " << path << " for writing."
+                   << G4endl;
+            return;
+        }
+        f << "# " << title << " (birth kinetic energy, MeV, one per line)\n";
+        f << "# Radionuclide: " << nuclideInfo << "\n";
+        f << "# Number of events: " << nofEvents << "\n";
+        f << "# Low-energy cut: ";
+        if (spec.GetAtomicCut() > 0.0) {
+            f << spec.GetAtomicCut() / keV
+              << " keV (atomic electrons below are skipped)\n";
+        } else {
+            f << "off (all decay electrons recorded)\n";
+        }
+        f << "# Mode: "
+          << (spec.IsPrimaryOnly() ? "primary ion only" : "full decay chain")
+          << "\n";
+        f << "# Date: " << ts << "\n";
+        f << std::fixed << std::setprecision(6);
+        for (G4double e : values) {
+            f << e << "\n";
+        }
+        f.close();
+    };
+
+    writeOne(spec.GetFileMinus(), "Beta- spectrum", myRun->GetBetaMinus());
+    writeOne(spec.GetFilePlus(), "Beta+ spectrum", myRun->GetBetaPlus());
+
+    G4cout << "Beta spectrum: " << myRun->GetBetaMinus().size()
+           << " beta- -> " << spec.GetFileMinus() << ", "
+           << myRun->GetBetaPlus().size()
+           << " beta+ -> " << spec.GetFilePlus() << G4endl;
+
+    std::ofstream outFile("results.txt", std::ios::out | std::ios::app);
+    if (outFile.is_open()) {
+        outFile << "Beta- entries: " << myRun->GetBetaMinus().size()
+                << " -> " << spec.GetFileMinus() << "\n";
+        outFile << "Beta+ entries: " << myRun->GetBetaPlus().size()
+                << " -> " << spec.GetFilePlus() << "\n\n";
         outFile.close();
     }
 }

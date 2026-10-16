@@ -2,10 +2,13 @@
 #include "EventAction.hh"
 #include "SourceConfig.hh"
 #include "DetectorConfig.hh"
+#include "BetaSpectrumConfig.hh"
 
 #include "G4Track.hh"
 #include "G4VProcess.hh"
 #include "G4ParticleDefinition.hh"
+#include "G4Electron.hh"
+#include "G4Positron.hh"
 #include "G4LogicalVolume.hh"
 #include "G4LogicalVolumeStore.hh"
 #include "G4VPhysicalVolume.hh"
@@ -14,6 +17,7 @@
 #include "G4Step.hh"
 #include "G4StepPoint.hh"
 #include "G4ThreeVector.hh"
+#include "G4SystemOfUnits.hh"
 
 TrackingAction::TrackingAction(EventAction* eventAction)
     : fEventAction(eventAction)
@@ -43,6 +47,41 @@ void TrackingAction::PreUserTrackingAction(const G4Track* track)
     // Skip the primary ion (parentID = 0). Its kinetic energy is set to
     // zero by PrimaryGeneratorAction anyway, so it has nothing to add.
     if (track->GetParentID() == 0) return;
+
+    // Beta-spectrum recording (independent of Path B bookkeeping below).
+    // Stores the BIRTH kinetic energy of every decay electron / positron
+    // above the atomic cut, split into two lists. Deliberately no
+    // position cut: this is the pure emission spectrum of the nuclide,
+    // not the in-volume subset.
+    // Two known admixtures, both expected:
+    //  - below-cut atomic electrons (Auger cascade, shake-off, eV-scale
+    //    relaxation, ~1 per nuclear decay) are skipped via the atomic
+    //    cut (/mySpectrum/setAtomicCut, default off);
+    //  - internal-conversion electrons of daughter levels are skipped in
+    //    primary-only mode (ParentID == 1, /mySpectrum/setPrimaryOnly)
+    //    and remain as narrow lines in full-chain mode (no ICM switch
+    //    exists in Geant4 11.4);
+    //  - chain nuclides (Ra-223, Ac-225) yield several beta decays per
+    //    event (one per chain member): each is genuine and is recorded
+    //    in full-chain mode, so entries per event exceed 1 by design
+    //    (in primary-only mode only the first decay is recorded).
+    if (BetaSpectrumConfig::Instance().IsEnabled()) {
+        const G4VProcess* birth = track->GetCreatorProcess();
+        if (birth && birth->GetProcessName() == "RadioactiveDecay" &&
+            track->GetKineticEnergy() >= BetaSpectrumConfig::Instance().GetAtomicCut() &&
+            (!BetaSpectrumConfig::Instance().IsPrimaryOnly() ||
+             track->GetParentID() == 1)) {
+            const G4double eMeV = track->GetKineticEnergy() / MeV;
+            if (eMeV > 0.0) {
+                const G4ParticleDefinition* def = track->GetParticleDefinition();
+                if (def == G4Electron::ElectronDefinition()) {
+                    fEventAction->AddBetaMinus(eMeV);
+                } else if (def == G4Positron::PositronDefinition()) {
+                    fEventAction->AddBetaPlus(eMeV);
+                }
+            }
+        }
+    }
 
     // Path B "in" (decay energy): count ONLY the tracks that inject NEW
     // energy into the material:

@@ -4,6 +4,8 @@
 #include "G4Types.hh"
 #include "G4UserEventAction.hh"
 
+#include <vector>
+
 class G4Event;
 
 /// Per-event action that accounts for decay energy and boundary flow.
@@ -46,10 +48,17 @@ public:
     void AddEscapedEnergy(G4double energy);
     void AddInflowEnergy(G4double energy);
 
+    // Per-track beta energies (MeV) recorded this event by TrackingAction.
+    // Flushed into MyRun at EndOfEventAction.
+    void AddBetaMinus(G4double eMeV);
+    void AddBetaPlus(G4double eMeV);
+
 private:
     G4double fDecayEnergy;        // kinetic energy of energy-injecting particles this event
     G4double fBoundaryLeakage;    // kinetic energy carried out across the boundary this event
     G4double fInflowEnergy;       // kinetic energy carried back in across the boundary this event
+    std::vector<G4double> fBetaMinus;  // beta- birth energies this event (MeV)
+    std::vector<G4double> fBetaPlus;   // beta+ birth energies this event (MeV)
 };
 
 #endif

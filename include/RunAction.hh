@@ -26,6 +26,7 @@ public:
 private:
     static G4String FormatValue(G4double value, const G4String& unit);
     void PrintAndSaveResults(const G4Run* run) const;
+    void WriteBetaSpectra(const G4Run* run) const;
 
     EventAction* fEventAction;  // unused in MT master, kept for compatibility
 

@@ -4,6 +4,8 @@
 #include "G4Run.hh"
 #include "G4Types.hh"
 
+#include <vector>
+
 /// Per-run accumulators for the two energy-accounting paths.
 ///
 /// In Geant4 MT mode each worker thread owns its own G4Run instance and
@@ -52,6 +54,16 @@ public:
         return fDecayEnergy - fEscapedEnergy + fInflowEnergy;
     }
 
+    // Beta spectrum "minus": birth kinetic energies of electrons (beta-)
+    // created by radioactive decay, stored in MeV. One entry per track.
+    void AddBetaMinus(G4double eMeV) { fBetaMinus.push_back(eMeV); }
+    const std::vector<G4double>& GetBetaMinus() const { return fBetaMinus; }
+
+    // Beta spectrum "plus": birth kinetic energies of positrons (beta+)
+    // created by radioactive decay, stored in MeV. One entry per track.
+    void AddBetaPlus(G4double eMeV) { fBetaPlus.push_back(eMeV); }
+    const std::vector<G4double>& GetBetaPlus() const { return fBetaPlus; }
+
     // Called by Geant4 to merge a worker run into the master run.
     void Merge(const G4Run* otherRun) override;
 
@@ -60,6 +72,8 @@ private:
     G4double fDecayEnergy   = 0.0;
     G4double fEscapedEnergy = 0.0;
     G4double fInflowEnergy  = 0.0;
+    std::vector<G4double> fBetaMinus;  // per-track beta- energies (MeV)
+    std::vector<G4double> fBetaPlus;   // per-track beta+ energies (MeV)
 };
 
 #endif

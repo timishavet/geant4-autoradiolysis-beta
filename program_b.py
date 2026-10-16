@@ -3,6 +3,15 @@ from tkinter import ttk, messagebox, filedialog, scrolledtext
 import math, os, datetime, re, subprocess, threading, time
 from collections import deque
 
+try:
+    import matplotlib
+    matplotlib.use("TkAgg")
+    from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
+    from matplotlib.figure import Figure
+    _MPL_OK = True
+except ImportError:
+    _MPL_OK = False
+
 # ============================================================
 # DATA TABLES
 # ============================================================
@@ -303,6 +312,7 @@ class ProgramB(tk.Tk):
         self.page_decay    = ttk.Frame(self.notebook)
         self.page_output   = ttk.Frame(self.notebook)
         self.page_misc     = ttk.Frame(self.notebook)
+        self.page_spectra  = ttk.Frame(self.notebook)
 
         self.notebook.add(self.page_geometry,       text="  Геометрия  ")
         self.notebook.add(self.page_medium,         text="  Среда и корпус  ")
@@ -310,6 +320,7 @@ class ProgramB(tk.Tk):
         self.notebook.add(self.page_decay,          text="  Распад  ")
         self.notebook.add(self.page_output,         text="  Получаемые значения  ")
         self.notebook.add(self.page_misc,           text="  Запуск и вывод  ")
+        self.notebook.add(self.page_spectra,        text="  Спектры  ")
 
         self._build_geometry_page()
         self._build_medium_page()
@@ -317,6 +328,7 @@ class ProgramB(tk.Tk):
         self._build_decay_page()
         self._build_output_page()
         self._build_misc_page()
+        self._build_spectra_page()
 
         bottom = ttk.Frame(self)
         bottom.pack(fill="x", padx=8, pady=8)
@@ -669,6 +681,23 @@ class ProgramB(tk.Tk):
 
         self.fixed_seed_var.trace_add("write", lambda *_: self._refresh_macro_preview())
 
+        lf_spec = ttk.LabelFrame(f, text="Бета-спектр")
+        lf_spec.pack(fill="x", padx=8, pady=8)
+        self.spectrum_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(lf_spec, text="Записывать энергии бета-частиц (для вкладки «Спектры»)",
+                        variable=self.spectrum_var,
+                        command=self._refresh_macro_preview).pack(anchor="w", padx=4, pady=4)
+        self.spectrum_mode_var = tk.StringVar(value="primary")
+        ttk.Radiobutton(lf_spec, text="Только первичное ядро (чистый спектр, без конверсии дочерних)",
+                        variable=self.spectrum_mode_var, value="primary",
+                        command=self._refresh_macro_preview).pack(anchor="w", padx=(16, 4), pady=1)
+        ttk.Radiobutton(lf_spec, text="Вся цепочка распадов (спектры дочерних смешаны в одном файле)",
+                        variable=self.spectrum_mode_var, value="chain",
+                        command=self._refresh_macro_preview).pack(anchor="w", padx=(16, 4), pady=1)
+        ttk.Label(lf_spec,
+                  text="В макрос добавятся /mySpectrum/enable и /mySpectrum/setPrimaryOnly. После прогона рядом с программой появятся beta_minus.txt и beta_plus.txt (по энергии на строку, МэВ), а графики построятся во вкладке «Спектры». Файлы перезаписываются при каждом спектр-прогоне. Пишутся все электроны распада, включая атомные оже-электроны эВ–кэВ диапазона. В режиме цепочки остаются конверсионные линии дочерних ядер; у цепочек записей больше, чем событий.",
+                  wraplength=600, justify="left").pack(anchor="w", padx=4, pady=(0, 4))
+
         lf_out = ttk.LabelFrame(f, text="Поля для вывода в results.txt и консоль")
         lf_out.pack(fill="both", expand=True, padx=8, pady=8)
 
@@ -750,6 +779,123 @@ class ProgramB(tk.Tk):
         ttk.Button(btn_frame2, text="Выбрать results.txt", command=self._load_result_file).pack(side="left", padx=2)
         self.result_text = scrolledtext.ScrolledText(lf_result, height=14, font=self.font_mono)
         self.result_text.pack(fill="both", expand=True, padx=4, pady=4)
+
+    # --- СПЕКТРЫ ---
+    def _build_spectra_page(self):
+        f = self.page_spectra
+
+        ctrl = ttk.Frame(f)
+        ctrl.pack(fill="x", padx=8, pady=(8, 4))
+        ttk.Label(ctrl, text="Число бинов").pack(side="left", padx=(0, 4))
+        self.bins_var = tk.StringVar(value="50")
+        ttk.Entry(ctrl, textvariable=self.bins_var, width=8).pack(side="left")
+        ttk.Button(ctrl, text="Обновить графики", command=self._refresh_spectra).pack(side="left", padx=(8, 0))
+        self.spectra_status_var = tk.StringVar(
+            value="Графики появятся после симуляции с включённой записью спектра.")
+        ttk.Label(ctrl, textvariable=self.spectra_status_var,
+                  wraplength=600, justify="left").pack(side="left", padx=(12, 0))
+
+        self.spectra_summary_var = tk.StringVar(value="")
+        ttk.Label(f, textvariable=self.spectra_summary_var, wraplength=1000,
+                  justify="left", style="Mono.TLabel").pack(anchor="w", padx=8, pady=4)
+
+        self.spectra_plot_frame = ttk.Frame(f)
+        self.spectra_plot_frame.pack(fill="both", expand=True, padx=8, pady=4)
+        if not _MPL_OK:
+            ttk.Label(self.spectra_plot_frame,
+                      text="Для графиков установите matplotlib: pip install matplotlib").pack(padx=4, pady=20)
+        self.spectra_fig = None
+        self.spectra_canvas = None
+
+    @staticmethod
+    def _read_spectrum_file(path):
+        """Returns (nuclide_label, num_events, values). Header lines starting with # are skipped."""
+        nuclide = ""
+        nevents = None
+        vals = []
+        with open(path, "r", encoding="utf-8") as fh:
+            for line in fh:
+                s = line.strip()
+                if not s:
+                    continue
+                if s.startswith("#"):
+                    if s.startswith("# Radionuclide:"):
+                        nuclide = s.split(":", 1)[1].strip()
+                    elif s.startswith("# Number of events:"):
+                        try:
+                            nevents = int(s.split(":", 1)[1].strip())
+                        except ValueError:
+                            nevents = None
+                    continue
+                try:
+                    vals.append(float(s))
+                except ValueError:
+                    continue
+        return nuclide, nevents, vals
+
+    def _refresh_spectra(self):
+        if not _MPL_OK:
+            self.spectra_status_var.set("matplotlib не установлен: pip install matplotlib")
+            return
+        try:
+            nbins = int(self.bins_var.get())
+        except (ValueError, TypeError):
+            self.spectra_status_var.set("Укажите целое число бинов (10..2000).")
+            return
+        nbins = max(10, min(2000, nbins))
+        self.bins_var.set(str(nbins))
+
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        found = []
+        for title, fname in (("Бета- спектр", "beta_minus.txt"),
+                             ("Бета+ спектр", "beta_plus.txt")):
+            path = os.path.join(script_dir, fname)
+            if os.path.isfile(path):
+                nuclide, nevents, vals = self._read_spectrum_file(path)
+                found.append((title, nuclide, nevents, vals))
+
+        for w in self.spectra_plot_frame.winfo_children():
+            w.destroy()
+        self.spectra_fig = None
+        self.spectra_canvas = None
+
+        present = [(t, n, e, v) for (t, n, e, v) in found if len(v) > 0]
+        if not present:
+            self.spectra_summary_var.set("")
+            self.spectra_status_var.set(
+                "Нет данных: файлы beta_minus.txt / beta_plus.txt не найдены или пусты. "
+                "Запустите симуляцию с включённой записью спектра.")
+            return
+
+        self.spectra_fig = Figure(figsize=(10, 4.6), dpi=100)
+        nplots = len(present)
+        for i, (title, nuclide, nevents, vals) in enumerate(present):
+            ax = self.spectra_fig.add_subplot(1, nplots, i + 1)
+            ax.hist(vals, bins=nbins, density=True)
+            ax.set_xlabel("Энергия, МэВ")
+            ax.set_ylabel("Плотность вероятности, 1/МэВ")
+            ax.set_title(title + (f" ({nuclide})" if nuclide else ""))
+            ax.grid(True, alpha=0.3)
+        self.spectra_fig.tight_layout()
+        self.spectra_canvas = FigureCanvasTkAgg(self.spectra_fig, master=self.spectra_plot_frame)
+        self.spectra_canvas.draw()
+        self.spectra_canvas.get_tk_widget().pack(fill="both", expand=True)
+        toolbar = NavigationToolbar2Tk(self.spectra_canvas, self.spectra_plot_frame)
+        toolbar.update()
+
+        lines = []
+        for title, nuclide, nevents, vals in present:
+            mean_v = sum(vals) / len(vals)
+            ev_txt = f", событий={nevents}" if nevents else ""
+            lines.append(f"{title}: записей={len(vals)}{ev_txt}, "
+                         f"среднее={mean_v:.4f} МэВ, максимум={max(vals):.4f} МэВ")
+            if len(vals) < 10000:
+                lines.append("  (мало статистики: картина шумная, увеличьте число распадов)")
+        for title, nuclide, nevents, vals in found:
+            if len(vals) == 0:
+                lines.append(f"{title}: записей нет (вид отсутствует или ниже порога/статистики)")
+        self.spectra_summary_var.set("\n".join(lines))
+        self.spectra_status_var.set("Площадь каждого графика нормирована на единицу.")
 
     # --------------------------------------------------------
     # LOGIC
@@ -1317,6 +1463,14 @@ class ProgramB(tk.Tk):
             for fid in unchecked:
                 output_lines.append(f"/myOutput/disable {fid}")
 
+        spec_on = (getattr(self, "spectrum_var", None) is not None
+                   and self.spectrum_var.get())
+        spectrum_lines = []
+        if spec_on:
+            mode = self.spectrum_mode_var.get() if hasattr(self, "spectrum_mode_var") else "primary"
+            spectrum_lines = ["/mySpectrum/enable",
+                              f"/mySpectrum/setPrimaryOnly {'true' if mode == 'primary' else 'false'}"]
+
         stamp = datetime.datetime.now().strftime("%d.%m.%Y %H:%M:%S")
 
         lines = [
@@ -1330,6 +1484,8 @@ class ProgramB(tk.Tk):
         if decay_comment:
             lines.append(decay_comment)
         lines.append(seed_comment)
+        if spec_on:
+            lines.append("# Спектр: запись beta_minus.txt / beta_plus.txt")
         lines.extend([
             "#",
             "# Запуск:",
@@ -1354,6 +1510,7 @@ class ProgramB(tk.Tk):
         if thread_line:
             lines.append(thread_line)
         lines.extend(output_lines)
+        lines.extend(spectrum_lines)
         lines.append(seed_line)
         lines.append("/run/initialize")
         lines.append("/process/had/rdm/thresholdForVeryLongDecayTime 1.0e+60 year")
@@ -1440,6 +1597,9 @@ class ProgramB(tk.Tk):
                       "irrTimeUnit": self.irrtime_unit_var.get() if hasattr(self, "irrtime_unit_var") else "ч"},
             "output": {fid: var.get() for fid, var in self.output_checkvars.items()},
             "rdmThreshold": True,
+            "spectrumEnabled": self.spectrum_var.get() if hasattr(self, "spectrum_var") else False,
+            "spectrumMode": self.spectrum_mode_var.get() if hasattr(self, "spectrum_mode_var") else "primary",
+            "spectrumBins": self.bins_var.get() if hasattr(self, "bins_var") else "50",
         }
 
     def _load_state(self, s):
@@ -1527,6 +1687,13 @@ class ProgramB(tk.Tk):
 
         misc = s.get("misc", {})
         self.rdm_threshold_var.set(s.get("rdmThreshold", True))
+        if hasattr(self, "spectrum_var"):
+            self.spectrum_var.set(s.get("spectrumEnabled", False))
+        if hasattr(self, "spectrum_mode_var"):
+            mode = s.get("spectrumMode", "primary")
+            self.spectrum_mode_var.set(mode if mode in ("primary", "chain") else "primary")
+        if hasattr(self, "bins_var"):
+            self.bins_var.set(s.get("spectrumBins", "50"))
         self.macro_text.delete("1.0", "end")
         self.macro_text.insert("1.0", misc.get("macro", ""))
 
@@ -1708,6 +1875,15 @@ class ProgramB(tk.Tk):
         if os.path.isfile(path):
             with open(path, "r", encoding="utf-8") as f:
                 self._show_results(f.read())
+        if code == 0 and getattr(self, "spectrum_var", None) is not None and self.spectrum_var.get():
+            try:
+                self.notebook.select(self.page_spectra)
+            except Exception:
+                pass
+            try:
+                self._refresh_spectra()
+            except Exception as e:
+                self.spectra_status_var.set(f"Не удалось построить графики: {e}")
         if code != 0:
             tail = "\n".join(out.splitlines()[-20:])
             messagebox.showwarning("Внимание",

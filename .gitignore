@@ -8,3 +8,5 @@ __pycache__/
 
 # Simulation output
 results.txt
+beta_minus.txt
+beta_plus.txt

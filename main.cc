@@ -3,6 +3,7 @@
 #include "DetectorMessenger.hh"
 #include "SourceMessenger.hh"
 #include "OutputMessenger.hh"
+#include "SpectrumMessenger.hh"
 #include "OutputConfig.hh"
 #include "FTFP_BERT.hh"
 
@@ -60,6 +61,7 @@ int main(int argc, char** argv)
     // Stateless singletons; safe to construct before /run/initialize.
     new SourceMessenger();
     new OutputMessenger();
+    new SpectrumMessenger();
 
     // Lift the G4RadioactiveDecay "very long decay time" threshold so that
     // long-lived nuclides (e.g. Co-60 T1/2=5.27 y, Cs-137 T1/2=30 y) will
