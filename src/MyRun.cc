@@ -6,6 +6,7 @@ void MyRun::Merge(const G4Run* otherRun)
     fEdep          += other->fEdep;
     fDecayEnergy   += other->fDecayEnergy;
     fEscapedEnergy += other->fEscapedEnergy;
+    fInflowEnergy  += other->fInflowEnergy;
 
     G4Run::Merge(otherRun);
 }

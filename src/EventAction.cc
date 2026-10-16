@@ -7,13 +7,15 @@
 
 EventAction::EventAction()
     : fDecayEnergy(0.0),
-      fBoundaryLeakage(0.0)
+      fBoundaryLeakage(0.0),
+      fInflowEnergy(0.0)
 {}
 
 void EventAction::BeginOfEventAction(const G4Event*)
 {
     fDecayEnergy     = 0.0;
     fBoundaryLeakage = 0.0;
+    fInflowEnergy    = 0.0;
 }
 
 void EventAction::EndOfEventAction(const G4Event*)
@@ -25,6 +27,7 @@ void EventAction::EndOfEventAction(const G4Event*)
 
     run->AddDecayEnergy(fDecayEnergy);
     run->AddEscapedEnergy(fBoundaryLeakage);
+    run->AddInflowEnergy(fInflowEnergy);
 }
 
 void EventAction::AddDecayEnergy(G4double energy)
@@ -38,5 +41,12 @@ void EventAction::AddEscapedEnergy(G4double energy)
 {
     if (energy > 0.0) {
         fBoundaryLeakage += energy;
+    }
+}
+
+void EventAction::AddInflowEnergy(G4double energy)
+{
+    if (energy > 0.0) {
+        fInflowEnergy += energy;
     }
 }

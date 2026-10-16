@@ -71,29 +71,12 @@ void TrackingAction::PreUserTrackingAction(const G4Track* track)
     fEventAction->AddDecayEnergy(track->GetKineticEnergy());
 }
 
-void TrackingAction::PostUserTrackingAction(const G4Track* track)
+void TrackingAction::PostUserTrackingAction(const G4Track*)
 {
-    if (!fEventAction || !track) return;
-
-    // Path B "out" (final leakage): if a track terminates OUTSIDE the
-    // cylinder, its remaining kinetic energy will never be deposited in
-    // the material - it is the energy that has left the volume for good.
-    // Track termination is the moment when the energy of a lineage stops
-    // being redistributed into new daughter tracks, so counting it here
-    // (once per terminating track, no "first exit" bookkeeping) yields a
-    // clean single subtraction of the true leakage.
-    //
-    // Tracks that terminate INSIDE the cylinder are not counted: their
-    // remaining energy is either deposited continuously (charged particles
-    // at rest) or converted into daughter tracks that will be accounted
-    // later, so keeping it out of "escaped" preserves the balance.
-    //
-    // Note: if a track scatters in the outside world (G4_AIR) and creates
-    // daughters there, each in-air daughter terminating outside would be
-    // counted too. In this application the world is low-density air and
-    // the cylinder is the only dense material, so in-air generation of
-    // secondaries is negligible and does not break the balance.
-    if (!IsInsideCylinder(track->GetPosition())) {
-        fEventAction->AddEscapedEnergy(track->GetKineticEnergy());
-    }
+    // Intentionally empty: Path B outflow is now measured at boundary
+    // crossings in SteppingAction (outflow/inflow bookkeeping), which also
+    // captures energy deposited outside the cylinder between exit and
+    // track death. The previous "residual energy at termination outside"
+    // rule undercounted leakage by exactly that amount and is retired;
+    // keeping it would double-count the outflow.
 }

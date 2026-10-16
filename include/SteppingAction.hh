@@ -4,16 +4,25 @@
 #include "G4UserSteppingAction.hh"
 
 class G4Step;
+class G4LogicalVolume;
 class EventAction;
 
-/// Per-step action (currently empty).
+/// Per-step action: boundary-flow bookkeeping for Path B.
 ///
-/// Previously this action reported the kinetic energy of a track when it
-/// crossed the cylinder boundary outward ("first exit" rule). That rule
-/// was replaced by the final-leakage rule in
-/// TrackingAction::PostUserTrackingAction (energy measured at the moment
-/// the track terminates outside the cylinder). This class is kept only to
-/// preserve the registered action list.
+/// For every step whose pre- and post-step points lie in different
+/// logical volumes relative to the liquid ("Cylinder"):
+///  - step leaving the liquid  -> outflow  += post-step kinetic energy;
+///  - step entering the liquid -> inflow   += post-step kinetic energy.
+///
+/// The post-step kinetic energy is exactly the energy at the crossing
+/// point: the Geant4 navigator limits every step at geometry boundaries,
+/// so a boundary-crossing step ends ON the boundary and its whole energy
+/// deposit lies on the starting side. A null physical volume (step ending
+/// outside the world) counts as "outside".
+///
+/// Pointer comparison of logical volumes keeps this cheap (two pointer
+/// fetches and two compares per step); the liquid volume pointer is
+/// resolved lazily once per worker thread.
 class SteppingAction : public G4UserSteppingAction
 {
 public:
@@ -23,7 +32,8 @@ public:
     void UserSteppingAction(const G4Step*) override;
 
 private:
-    EventAction* fEventAction;
+    EventAction*      fEventAction;
+    G4LogicalVolume*  fLiquidLV = nullptr;  // resolved lazily, cached per thread
 };
 
 #endif

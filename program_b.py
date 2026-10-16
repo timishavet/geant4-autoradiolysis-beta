@@ -250,6 +250,7 @@ class ProgramB(tk.Tk):
 
         self.output_checkvars = {}
         self.rdm_threshold_var = tk.BooleanVar(value=True)
+        self._current_random_seed = None
 
         self._apply_visual_style()
         self._build_ui()
@@ -258,7 +259,10 @@ class ProgramB(tk.Tk):
         self._populate_output_checks()
         self._update_geometry()
         self._update_decay_visibility()
-        self._refresh_macro_preview()
+        if hasattr(self, "random_seed_var"):
+            self._on_seed_mode_changed()
+        else:
+            self._refresh_macro_preview()
 
     # --------------------------------------------------------
     # VISUAL STYLE (fonts, colors). Behavior is unchanged.
@@ -641,6 +645,29 @@ class ProgramB(tk.Tk):
         ttk.Button(lf_threads, text="Макс.", command=self._set_max_threads).grid(row=0, column=2, padx=4, pady=4)
         ttk.Label(lf_threads, text="0 = использовать максимальное число потоков. В макрос добавляется /run/numberOfThreads N").grid(row=1, column=0, columnspan=3, sticky="w", padx=4, pady=4)
         self.num_threads_var.trace_add("write", lambda *_: self._refresh_macro_preview())
+
+        lf_seed = ttk.LabelFrame(f, text="Сид симуляции")
+        lf_seed.pack(fill="x", padx=8, pady=8)
+
+        self.random_seed_var = tk.BooleanVar(value=True)
+        self.seed_check = ttk.Checkbutton(lf_seed, text="Случайный сид при каждом запуске",
+                                          variable=self.random_seed_var,
+                                          command=self._on_seed_mode_changed)
+        self.seed_check.grid(row=0, column=0, columnspan=3, sticky="w", padx=4, pady=4)
+
+        self.fixed_seed_frame = ttk.Frame(lf_seed)
+        self.fixed_seed_frame.grid(row=1, column=0, columnspan=3, sticky="ew", padx=4, pady=4)
+        ttk.Label(self.fixed_seed_frame, text="Сид (целое 1..2147483647)").pack(side="left", padx=(0, 8))
+        self.fixed_seed_var = tk.StringVar(value="12345")
+        ttk.Entry(self.fixed_seed_frame, textvariable=self.fixed_seed_var, width=14).pack(side="left")
+        ttk.Button(self.fixed_seed_frame, text="Новый случайный", command=self._fill_fixed_with_random).pack(side="left", padx=(8, 0))
+
+        self.seed_info_var = tk.StringVar(value="")
+        ttk.Label(lf_seed, textvariable=self.seed_info_var, wraplength=600, justify="left").grid(row=2, column=0, columnspan=3, sticky="w", padx=4, pady=4)
+        ttk.Label(lf_seed, text="В макрос добавляется /random/setSeeds N перед /run/initialize").grid(row=3, column=0, columnspan=3, sticky="w", padx=4, pady=4)
+        lf_seed.columnconfigure(1, weight=1)
+
+        self.fixed_seed_var.trace_add("write", lambda *_: self._refresh_macro_preview())
 
         lf_out = ttk.LabelFrame(f, text="Поля для вывода в results.txt и консоль")
         lf_out.pack(fill="both", expand=True, padx=8, pady=8)
@@ -1116,6 +1143,56 @@ class ProgramB(tk.Tk):
         self.num_threads_var.set(str(n))
         self.gen_status.config(text=f"Установлено макс. потоков: {n}")
 
+    # --- SEED HANDLING ---
+
+    def _new_random_seed(self):
+        import random as _py_random
+        rng = _py_random.SystemRandom()
+        pair = (rng.randint(1, 2147483647), rng.randint(1, 2147483647))
+        self._current_random_seed = pair
+        return pair
+
+    @staticmethod
+    def _second_seed_from_first(s1):
+        # Geant4 11.4 с движком MixMax требует минимум два значения
+        # в /random/setSeeds — одиночная команда молча игнорируется
+        # ("should have at least two values. Command ignored").
+        # Второй сид выводим детерминированно из первого, чтобы поле
+        # ввода в интерфейсе оставалось одно.
+        s2 = (s1 * 1103515245 + 12345) % 2147483648
+        return s2 if s2 >= 1 else 1
+
+    def _effective_seed(self):
+        """Returns (s1, s2, is_random). Raises ValueError on bad fixed seed."""
+        is_random = self.random_seed_var.get() if hasattr(self, "random_seed_var") else True
+        if is_random:
+            cur = self._current_random_seed
+            if cur is None or not isinstance(cur, (tuple, list)) or len(cur) != 2:
+                cur = self._new_random_seed()
+            return (cur[0], cur[1], True)
+        s = format_number(self.fixed_seed_var.get())
+        try:
+            n = int(float(s)) if s is not None else 0
+        except (ValueError, TypeError):
+            n = 0
+        if n < 1 or n > 2147483647:
+            raise ValueError("Укажите целый сид от 1 до 2147483647.")
+        return (n, self._second_seed_from_first(n), False)
+
+    def _on_seed_mode_changed(self):
+        is_random = self.random_seed_var.get()
+        if hasattr(self, "fixed_seed_frame"):
+            if is_random:
+                self.fixed_seed_frame.grid_remove()
+            else:
+                self.fixed_seed_frame.grid()
+        self._refresh_macro_preview()
+
+    def _fill_fixed_with_random(self):
+        import random as _py_random
+        seed = _py_random.SystemRandom().randint(1, 2147483647)
+        self.fixed_seed_var.set(str(seed))
+
     # --- MACRO BUILDING ---
 
     def _build_macro(self):
@@ -1218,6 +1295,16 @@ class ProgramB(tk.Tk):
         except ValueError:
             pass
 
+        seed_s1, seed_s2, seed_is_random = self._effective_seed()
+        seed_kind = 'случайный' if seed_is_random else 'фиксированный'
+        seed_comment = f"# Сид: {seed_s1} {seed_s2} ({seed_kind})"
+        seed_line = f"/random/setSeeds {seed_s1} {seed_s2}"
+        if hasattr(self, "seed_info_var"):
+            try:
+                self.seed_info_var.set(f"Текущий сид для запуска: {seed_s1} {seed_s2} ({seed_kind})")
+            except Exception:
+                pass
+
         unchecked = [fid for fid, var in self.output_checkvars.items() if not var.get()]
         if self._decay_mode() == DECAY_MODES[0]:
             for fid in ("activity", "irr_time"):
@@ -1242,6 +1329,7 @@ class ProgramB(tk.Tk):
         ]
         if decay_comment:
             lines.append(decay_comment)
+        lines.append(seed_comment)
         lines.extend([
             "#",
             "# Запуск:",
@@ -1266,6 +1354,7 @@ class ProgramB(tk.Tk):
         if thread_line:
             lines.append(thread_line)
         lines.extend(output_lines)
+        lines.append(seed_line)
         lines.append("/run/initialize")
         lines.append("/process/had/rdm/thresholdForVeryLongDecayTime 1.0e+60 year")
         lines.append(f"/run/beamOn {beam_on_n}")
@@ -1341,6 +1430,8 @@ class ProgramB(tk.Tk):
             "customRnZ": self.custom_rn_z.get(),
             "customRnA": self.custom_rn_a.get(),
             "numThreads": self.num_threads_var.get(),
+            "randomSeed": self.random_seed_var.get() if hasattr(self, "random_seed_var") else True,
+            "fixedSeed": self.fixed_seed_var.get() if hasattr(self, "fixed_seed_var") else "12345",
             "decay": {"count": self.decay_count_var.get(),
                       "mode": self._decay_mode() if hasattr(self, "decay_mode_var") else DECAY_MODES[0],
                       "activity": self.activity_var.get() if hasattr(self, "activity_var") else "1",
@@ -1399,6 +1490,13 @@ class ProgramB(tk.Tk):
         self.custom_rn_a.set(s.get("customRnA", "60"))
 
         self.num_threads_var.set(s.get("numThreads", "0"))
+
+        if hasattr(self, "random_seed_var"):
+            self.random_seed_var.set(s.get("randomSeed", True))
+        if hasattr(self, "fixed_seed_var"):
+            self.fixed_seed_var.set(s.get("fixedSeed", "12345"))
+        if hasattr(self, "random_seed_var"):
+            self._on_seed_mode_changed()
 
         decay = s.get("decay", {})
         self.decay_count_var.set(decay.get("count", "1000000"))
@@ -1473,6 +1571,8 @@ class ProgramB(tk.Tk):
 
     def _run_simulation(self):
         script_dir = os.path.dirname(os.path.abspath(__file__))
+        if getattr(self, "random_seed_var", None) is not None and self.random_seed_var.get():
+            self._new_random_seed()
         try:
             text = self._build_macro()
         except Exception as e:

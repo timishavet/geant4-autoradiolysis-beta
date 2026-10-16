@@ -15,15 +15,15 @@
 /// Two paths converge here:
 ///  - Path A (full deposit): sum of step->GetTotalEnergyDeposit() over all
 ///    steps inside the cylinder, accumulated by DoseDetector.
-///  - Path B (decay - escape): kinetic energy of particles created by
-///    radioactive decay (Path B "in"), minus kinetic energy of particles
-///    crossing the cylinder boundary outward, counted once per track
-///    (Path B "out"). The net value is the energy transferred to the volume.
+///  - Path B (inject - outflow + inflow): kinetic energy of particles
+///    created by radioactive decay (injected), minus kinetic energy carried
+///    out across the cylinder boundary, plus kinetic energy carried back
+///    in by returning tracks. The net value is the energy transferred to
+///    the volume.
 ///
-/// Comparing the two at run end is a built-in validation: a significant
-/// divergence (A > B) indicates that some particles left the cylinder and
-/// returned, depositing part of their energy on the way back — exactly the
-/// situation that Path B cannot see by construction.
+/// Comparing the two at run end is a built-in validation: with exact
+/// boundary-flow bookkeeping both must agree up to tracking leftovers;
+/// a significant divergence indicates a bookkeeping bug.
 class MyRun : public G4Run
 {
 public:
@@ -38,20 +38,28 @@ public:
     void AddDecayEnergy(G4double e) { fDecayEnergy += e; }
     G4double GetDecayEnergy() const { return fDecayEnergy; }
 
-    // Path B "out": kinetic energy of particles leaving the cylinder (once per track).
+    // Path B "out": kinetic energy carried out across the cylinder boundary.
     void AddEscapedEnergy(G4double e) { fEscapedEnergy += e; }
     G4double GetEscapedEnergy() const { return fEscapedEnergy; }
 
+    // Path B "in-flow": kinetic energy carried back in by returning tracks.
+    void AddInflowEnergy(G4double e) { fInflowEnergy += e; }
+    G4double GetInflowEnergy() const { return fInflowEnergy; }
+
     // Path B net: energy transferred to the cylinder.
-    G4double GetTransferredEnergy() const { return fDecayEnergy - fEscapedEnergy; }
+    G4double GetTransferredEnergy() const
+    {
+        return fDecayEnergy - fEscapedEnergy + fInflowEnergy;
+    }
 
     // Called by Geant4 to merge a worker run into the master run.
     void Merge(const G4Run* otherRun) override;
 
 private:
-    G4double fEdep         = 0.0;
-    G4double fDecayEnergy  = 0.0;
+    G4double fEdep          = 0.0;
+    G4double fDecayEnergy   = 0.0;
     G4double fEscapedEnergy = 0.0;
+    G4double fInflowEnergy  = 0.0;
 };
 
 #endif
