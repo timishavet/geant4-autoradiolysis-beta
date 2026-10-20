@@ -8,8 +8,8 @@ rem  install_data.bat - установка пакетов данных Geant4
 rem
 rem  Порядок: скачайте 5 архивов .tar.gz (ссылки в этом окне),
 rem  положите их рядом с этим файлом и запустите его ОДИН раз.
-rem  Батник распакует данные в штатную папку данных Geant4
-rem  (share\Geant4\data) и пропишет переменные среды G4*DATA.
+rem  Батник распакует данные в папку data рядом с каталогом
+rem  установки Geant4 и пропишет переменные среды G4*DATA.
 rem ============================================================
 
 rem --- 1. установлен ли Geant4 ---
@@ -35,8 +35,6 @@ if not defined G4VER goto :no_version
 
 rem куда распаковываем (создаётся при необходимости)
 set "DATATARGET=!G4ROOT!\data"
-rem а здесь пакеты могут уже лежать, если их ставил установщик Geant4
-set "G4DATASTD=!G4ROOT!\share\Geant4\data"
 
 rem --- 3. есть ли встроенный tar (Windows 10 1803+) ---
 set "TAROK="
@@ -91,10 +89,9 @@ set "PAT=%~2"
 set "ASTEM=%~3"
 set "URL=%~4"
 
-rem папка уже распакована? (сначала куда распаковываем, потом штатная папка Geant4)
+rem папка уже распакована?
 set "FND="
 for /d %%D in ("!DATATARGET!\%PAT%*") do if not defined FND set "FND=%%~fD"
-if not defined FND for /d %%D in ("!G4DATASTD!\%PAT%*") do if not defined FND set "FND=%%~fD"
 if defined FND (
     setx !VN! "!FND!" >nul 2>&1
     set "!VN!=!FND!"
@@ -148,7 +145,6 @@ for /f "tokens=1* delims==" %%A in ('set !VN! 2^>nul') do set "VAL=%%B"
 if defined VAL if exist "!VAL!\" exit /b 0
 set "FND="
 for /d %%D in ("!DATATARGET!\%PAT%*") do if not defined FND set "FND=%%~fD"
-if not defined FND for /d %%D in ("!G4DATASTD!\%PAT%*") do if not defined FND set "FND=%%~fD"
 if defined FND (
     setx !VN! "!FND!" >nul 2>&1
     set "!VN!=!FND!"

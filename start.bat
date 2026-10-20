@@ -34,12 +34,10 @@ set "G4BAT="
 for /f "delims=" %%i in ('where geant4.bat 2^>nul') do if not defined G4BAT set "G4BAT=%%i"
 if not defined G4BAT goto :no_geant4
 
-rem --- корень установки Geant4 и папки данных ---
+rem --- корень установки Geant4 и папка данных ---
 set "G4ROOT=!G4BAT:\bin\geant4.bat=!"
 rem куда ставит install_data.bat (создаётся при необходимости)
 set "DATATARGET=!G4ROOT!\data"
-rem а здесь пакеты могут уже лежать, если их ставил установщик Geant4
-set "G4DATASTD=!G4ROOT!\share\Geant4\data"
 
 set "REPORT=%TEMP%\g4data_report.txt"
 if exist "!REPORT!" del "!REPORT!" >nul 2>&1
@@ -82,7 +80,6 @@ for /f "tokens=1* delims==" %%A in ('set !VN! 2^>nul') do set "VAL=%%B"
 if defined VAL if exist "!VAL!\" exit /b 0
 set "DIRFOUND="
 for /d %%D in ("!DATATARGET!\%PAT%*") do if not defined DIRFOUND set "DIRFOUND=%%~fD"
-if not defined DIRFOUND for /d %%D in ("!G4DATASTD!\%PAT%*") do if not defined DIRFOUND set "DIRFOUND=%%~fD"
 if defined DIRFOUND (
     setx !VN! "!DIRFOUND!" >nul 2>&1
     set "!VN!=!DIRFOUND!"
@@ -103,7 +100,6 @@ for /f "tokens=1* delims==" %%A in ('set !VN! 2^>nul') do set "VAL=%%B"
 if defined VAL if exist "!VAL!\" exit /b 0
 set "DIRFOUND="
 for /d %%D in ("!DATATARGET!\%PAT%*") do if not defined DIRFOUND set "DIRFOUND=%%~fD"
-if not defined DIRFOUND for /d %%D in ("!G4DATASTD!\%PAT%*") do if not defined DIRFOUND set "DIRFOUND=%%~fD"
 if defined DIRFOUND (
     setx !VN! "!DIRFOUND!" >nul 2>&1
     set "!VN!=!DIRFOUND!"
