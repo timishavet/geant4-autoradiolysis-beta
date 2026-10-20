@@ -1762,7 +1762,12 @@ class ProgramB(tk.Tk):
                 exe = cand
                 break
         if exe is None:
-            messagebox.showerror("Ошибка", "Не найден main.exe в папке build программы.\nСоберите проект и повторите запуск.")
+            messagebox.showerror(
+                "Ошибка",
+                "Не найден файл main.exe.\n\n"
+                "Ожидается: <папка программы>\\build\\Release\\main.exe\n\n"
+                "Проверьте, что архив распакован полностью, и повторите запуск.",
+            )
             return
         self._sim_max_seen = 0
         self._sim_start = time.monotonic()
@@ -1818,7 +1823,11 @@ class ProgramB(tk.Tk):
             code = proc.wait()
             out = "\n".join(tail)
         except FileNotFoundError:
-            code, out = -1, "Файл main.exe не найден."
+            code, out = -1, (
+                "Не удалось запустить main.exe.\n"
+                "Проверьте, что архив распакован полностью "
+                "(ожидается <папка программы>\\build\\Release\\main.exe)."
+            )
         except Exception as e:
             code, out = -1, str(e)
         finally:
