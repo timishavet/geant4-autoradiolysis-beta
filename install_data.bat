@@ -8,8 +8,8 @@ rem  install_data.bat - установка пакетов данных Geant4
 rem
 rem  Порядок: скачайте 5 архивов .tar.gz (ссылки в этом окне),
 rem  положите их рядом с этим файлом и запустите его ОДИН раз.
-rem  Батник распакует данные в папку Geant4 и пропишет
-rem  переменные среды G4*DATA.
+rem  Батник распакует данные в штатную папку данных Geant4
+rem  (share\Geant4\data) и пропишет переменные среды G4*DATA.
 rem ============================================================
 
 rem --- 1. установлен ли Geant4 ---
@@ -33,7 +33,9 @@ if defined VLINE (
 if not defined G4VER set /p G4VER=Не удалось определить версию Geant4. Введите её (например 11.4.1): 
 if not defined G4VER goto :no_version
 
-set "DATATARGET=!G4ROOT!\Geant4-!G4VER!\data"
+rem куда распаковываем (создаётся при необходимости)
+set "DATATARGET=!G4ROOT!\data"
+rem а здесь пакеты могут уже лежать, если их ставил установщик Geant4
 set "G4DATASTD=!G4ROOT!\share\Geant4\data"
 
 rem --- 3. есть ли встроенный tar (Windows 10 1803+) ---
@@ -89,7 +91,7 @@ set "PAT=%~2"
 set "ASTEM=%~3"
 set "URL=%~4"
 
-rem папка уже распакована? (проверяются обе папки)
+rem папка уже распакована? (сначала куда распаковываем, потом штатная папка Geant4)
 set "FND="
 for /d %%D in ("!DATATARGET!\%PAT%*") do if not defined FND set "FND=%%~fD"
 if not defined FND for /d %%D in ("!G4DATASTD!\%PAT%*") do if not defined FND set "FND=%%~fD"
@@ -112,7 +114,7 @@ if not defined ARCH (
 
 if not defined TAROK goto :no_tar
 
-rem распаковка в папку Geant4
+rem распаковка в папку <установка Geant4>\data (создаётся при необходимости)
 if not exist "!DATATARGET!" mkdir "!DATATARGET!" >nul 2>&1
 set "LOG=%TEMP%\g4_tar.log"
 tar -xzf "!ARCH!" -C "!DATATARGET!" >"!LOG!" 2>&1
