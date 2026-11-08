@@ -267,7 +267,8 @@ class ProgramB(tk.Tk):
         self._populate_radionuclides()
         self._populate_output_checks()
         self._update_geometry()
-        self._update_decay_visibility()
+        self._on_decay_mode_selected()
+        self._update_spectra_tab_visibility()
         if hasattr(self, "random_seed_var"):
             self._on_seed_mode_changed()
         else:
@@ -294,6 +295,7 @@ class ProgramB(tk.Tk):
         style.configure("TNotebook.Tab", font=self.font_bold, padding=(10, 4))
 
         style.configure("Hint.TLabel", foreground="#555555")
+        style.configure("Bold.TCheckbutton", font=self.font_bold)
         style.configure("Error.TLabel", foreground="#B00020")
         style.configure("Ok.TLabel", foreground="#1E7E34")
         style.configure("Warn.TLabel", foreground="#B26A00")
@@ -352,27 +354,27 @@ class ProgramB(tk.Tk):
         ttk.Label(lf, text="Вариант геометрии").grid(row=0, column=0, sticky="w", padx=4, pady=4)
         self.geometry_combo = ttk.Combobox(lf, state="readonly")
         self.geometry_combo["values"] = [v["label"] for v in GEOMETRY_VARIANTS]
-        self.geometry_combo.current(0)
+        self.geometry_combo.current(2)
         self.geometry_combo.grid(row=0, column=1, sticky="ew", padx=4, pady=4)
         self.geometry_combo.bind("<<ComboboxSelected>>", lambda _: (self._update_geometry(), self._refresh_macro_preview()))
 
         ttk.Label(lf, text="Высота").grid(row=1, column=0, sticky="w", padx=4, pady=4)
         hf = ttk.Frame(lf)
         hf.grid(row=1, column=1, sticky="ew", padx=4, pady=4)
-        self.height_var = tk.StringVar(value="6.0")
+        self.height_var = tk.StringVar(value="5.0")
         ttk.Entry(hf, textvariable=self.height_var, width=12).pack(side="left", fill="x", expand=True)
         self.height_unit = ttk.Combobox(hf, values=["мм","см","м"], state="readonly", width=5)
         self.height_unit.set("см")
         self.height_unit.pack(side="left", padx=(4,0))
 
-        ttk.Label(lf, text="Радиус").grid(row=2, column=0, sticky="w", padx=4, pady=4)
+        ttk.Label(lf, text="Диаметр").grid(row=2, column=0, sticky="w", padx=4, pady=4)
         rf = ttk.Frame(lf)
         rf.grid(row=2, column=1, sticky="ew", padx=4, pady=4)
-        self.radius_var = tk.StringVar(value="2.0")
-        ttk.Entry(rf, textvariable=self.radius_var, width=12).pack(side="left", fill="x", expand=True)
-        self.radius_unit = ttk.Combobox(rf, values=["мм","см","м"], state="readonly", width=5)
-        self.radius_unit.set("см")
-        self.radius_unit.pack(side="left", padx=(4,0))
+        self.diameter_var = tk.StringVar(value="1.0")
+        ttk.Entry(rf, textvariable=self.diameter_var, width=12).pack(side="left", fill="x", expand=True)
+        self.diameter_unit = ttk.Combobox(rf, values=["мм","см","м"], state="readonly", width=5)
+        self.diameter_unit.set("см")
+        self.diameter_unit.pack(side="left", padx=(4,0))
 
         self.shell_frame = ttk.LabelFrame(lf, text="Стеклянная оболочка (стакан / пробирка)")
         self.shell_frame.grid(row=3, column=0, columnspan=2, sticky="ew", padx=4, pady=8)
@@ -390,7 +392,7 @@ class ProgramB(tk.Tk):
         ttk.Label(self.shell_frame, text="Сухой бортик выше уровня").grid(row=1, column=0, sticky="w", padx=4, pady=4)
         rimf = ttk.Frame(self.shell_frame)
         rimf.grid(row=1, column=1, sticky="ew", padx=4, pady=4)
-        self.rim_var = tk.StringVar(value="0")
+        self.rim_var = tk.StringVar(value="30")
         ttk.Entry(rimf, textvariable=self.rim_var, width=12).pack(side="left", fill="x", expand=True)
         self.rim_unit = ttk.Combobox(rimf, values=["мм","см","м"], state="readonly", width=5)
         self.rim_unit.set("мм")
@@ -403,7 +405,7 @@ class ProgramB(tk.Tk):
             wraplength=620, justify="left",
         ).grid(row=2, column=0, columnspan=2, sticky="w", padx=4, pady=(4, 6))
 
-        ttk.Label(lf, text="В макрос передаётся половина высоты: /myDetector/setHalfHeight").grid(row=4, column=0, columnspan=2, sticky="w", padx=4, pady=(8,4))
+
 
         lf.columnconfigure(1, weight=1)
 
@@ -416,8 +418,8 @@ class ProgramB(tk.Tk):
 
         self.height_var.trace_add("write", lambda *_: (self._update_geometry(), self._refresh_macro_preview()))
         self.height_unit.bind("<<ComboboxSelected>>", lambda _: (self._update_geometry(), self._refresh_macro_preview()))
-        self.radius_var.trace_add("write", lambda *_: (self._update_geometry(), self._refresh_macro_preview()))
-        self.radius_unit.bind("<<ComboboxSelected>>", lambda _: (self._update_geometry(), self._refresh_macro_preview()))
+        self.diameter_var.trace_add("write", lambda *_: (self._update_geometry(), self._refresh_macro_preview()))
+        self.diameter_unit.bind("<<ComboboxSelected>>", lambda _: (self._update_geometry(), self._refresh_macro_preview()))
         self.wall_var.trace_add("write", lambda *_: (self._update_geometry(), self._refresh_macro_preview()))
         self.wall_unit.bind("<<ComboboxSelected>>", lambda _: (self._update_geometry(), self._refresh_macro_preview()))
         self.rim_var.trace_add("write", lambda *_: (self._update_geometry(), self._refresh_macro_preview()))
@@ -460,7 +462,7 @@ class ProgramB(tk.Tk):
         self.custom_mat_density = tk.StringVar(value="1.0")
         ttk.Entry(self.custom_mat_frame, textvariable=self.custom_mat_density).grid(row=1, column=1, sticky="ew", padx=4, pady=4)
 
-        ttk.Label(self.custom_mat_frame, text="Укажите любое NIST-имя и переопределите плотность.\nВ макрос добавятся /myDetector/setMaterial и /myDetector/setMaterialDensity", wraplength=500, justify="left").grid(row=2, column=0, columnspan=2, sticky="w", padx=4, pady=8)
+        ttk.Label(self.custom_mat_frame, text="Укажите любое NIST-имя и переопределите плотность.", wraplength=500, justify="left").grid(row=2, column=0, columnspan=2, sticky="w", padx=4, pady=8)
 
         self.custom_mat_name.trace_add("write", lambda *_: self._refresh_macro_preview())
         self.custom_mat_density.trace_add("write", lambda *_: self._refresh_macro_preview())
@@ -500,7 +502,7 @@ class ProgramB(tk.Tk):
         self.custom_glass_density = tk.StringVar(value="2.32")
         ttk.Entry(self.custom_glass_frame, textvariable=self.custom_glass_density).grid(row=1, column=1, sticky="ew", padx=4, pady=4)
 
-        ttk.Label(self.custom_glass_frame, text="В макрос добавятся /myDetector/setGlassMaterial и /myDetector/setGlassMaterialDensity", wraplength=500, justify="left").grid(row=2, column=0, columnspan=2, sticky="w", padx=4, pady=8)
+
 
         self.custom_glass_name.trace_add("write", lambda *_: self._refresh_macro_preview())
         self.custom_glass_density.trace_add("write", lambda *_: self._refresh_macro_preview())
@@ -567,7 +569,6 @@ class ProgramB(tk.Tk):
         self.rn_desc_frame.grid(row=2, column=0, sticky="ew", padx=8, pady=8)
         self.rn_desc_var = tk.StringVar()
         ttk.Label(self.rn_desc_frame, textvariable=self.rn_desc_var, wraplength=500, justify="left").pack(fill="x", padx=4, pady=4)
-        ttk.Label(self.rn_desc_frame, text="В макрос передаётся: /mySource/setRadionuclide Z A").pack(fill="x", padx=4, pady=(4,8))
 
         self.rn_data_frame = ttk.LabelFrame(f, text="Данные Geant4")
         self.rn_data_frame.grid(row=3, column=0, sticky="ew", padx=8, pady=8)
@@ -586,7 +587,7 @@ class ProgramB(tk.Tk):
         mode_frame.grid(row=0, column=0, sticky="ew", padx=8, pady=8)
         mode_frame.columnconfigure(1, weight=1)
         ttk.Label(mode_frame, text="Режим").grid(row=0, column=0, sticky="w", padx=4, pady=4)
-        self.decay_mode_var = tk.StringVar(value=DECAY_MODES[0])
+        self.decay_mode_var = tk.StringVar(value=DECAY_MODES[1])
         self.decay_mode_combo = ttk.Combobox(mode_frame, textvariable=self.decay_mode_var,
                                              values=DECAY_MODES, state="readonly")
         self.decay_mode_combo.grid(row=0, column=1, sticky="ew", padx=4, pady=4)
@@ -648,16 +649,6 @@ class ProgramB(tk.Tk):
     def _build_output_page(self):
         f = self.page_output
 
-        lf_threads = ttk.LabelFrame(f, text="Параллелизм симуляции")
-        lf_threads.pack(fill="x", padx=8, pady=8)
-
-        ttk.Label(lf_threads, text="Количество потоков").grid(row=0, column=0, sticky="w", padx=4, pady=4)
-        self.num_threads_var = tk.StringVar(value="0")
-        ttk.Entry(lf_threads, textvariable=self.num_threads_var, width=10).grid(row=0, column=1, sticky="w", padx=4, pady=4)
-        ttk.Button(lf_threads, text="Макс.", command=self._set_max_threads).grid(row=0, column=2, padx=4, pady=4)
-        ttk.Label(lf_threads, text="0 = использовать максимальное число потоков. В макрос добавляется /run/numberOfThreads N").grid(row=1, column=0, columnspan=3, sticky="w", padx=4, pady=4)
-        self.num_threads_var.trace_add("write", lambda *_: self._refresh_macro_preview())
-
         lf_seed = ttk.LabelFrame(f, text="Сид симуляции")
         lf_seed.pack(fill="x", padx=8, pady=8)
 
@@ -676,7 +667,6 @@ class ProgramB(tk.Tk):
 
         self.seed_info_var = tk.StringVar(value="")
         ttk.Label(lf_seed, textvariable=self.seed_info_var, wraplength=600, justify="left").grid(row=2, column=0, columnspan=3, sticky="w", padx=4, pady=4)
-        ttk.Label(lf_seed, text="В макрос добавляется /random/setSeeds N перед /run/initialize").grid(row=3, column=0, columnspan=3, sticky="w", padx=4, pady=4)
         lf_seed.columnconfigure(1, weight=1)
 
         self.fixed_seed_var.trace_add("write", lambda *_: self._refresh_macro_preview())
@@ -684,9 +674,10 @@ class ProgramB(tk.Tk):
         lf_spec = ttk.LabelFrame(f, text="Бета-спектр")
         lf_spec.pack(fill="x", padx=8, pady=8)
         self.spectrum_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(lf_spec, text="Записывать энергии бета-частиц (для вкладки «Спектры»)",
+        ttk.Checkbutton(lf_spec, text="Включить построение бета-спектров",
                         variable=self.spectrum_var,
-                        command=self._refresh_macro_preview).pack(anchor="w", padx=4, pady=4)
+                        command=self._on_spectrum_toggle,
+                        style="Bold.TCheckbutton").pack(anchor="w", padx=4, pady=4)
         self.spectrum_mode_var = tk.StringVar(value="primary")
         ttk.Radiobutton(lf_spec, text="Только первичное ядро (чистый спектр, без конверсии дочерних)",
                         variable=self.spectrum_mode_var, value="primary",
@@ -694,9 +685,6 @@ class ProgramB(tk.Tk):
         ttk.Radiobutton(lf_spec, text="Вся цепочка распадов (спектры дочерних смешаны в одном файле)",
                         variable=self.spectrum_mode_var, value="chain",
                         command=self._refresh_macro_preview).pack(anchor="w", padx=(16, 4), pady=1)
-        ttk.Label(lf_spec,
-                  text="В макрос добавятся /mySpectrum/enable и /mySpectrum/setPrimaryOnly. После прогона рядом с программой появятся beta_minus.txt и beta_plus.txt (по энергии на строку, МэВ), а графики построятся во вкладке «Спектры». Файлы перезаписываются при каждом спектр-прогоне. Пишутся все электроны распада, включая атомные оже-электроны эВ–кэВ диапазона. В режиме цепочки остаются конверсионные линии дочерних ядер; у цепочек записей больше, чем событий.",
-                  wraplength=600, justify="left").pack(anchor="w", padx=4, pady=(0, 4))
 
         lf_out = ttk.LabelFrame(f, text="Поля для вывода в results.txt и консоль")
         lf_out.pack(fill="both", expand=True, padx=8, pady=8)
@@ -718,7 +706,15 @@ class ProgramB(tk.Tk):
         self.checks_canvas.bind("<Enter>", lambda _: self._wheel_on())
         self.checks_canvas.bind("<Leave>", lambda _: self._wheel_off())
 
-        ttk.Label(lf_out, text="Снимите галочку с поля, чтобы оно не попало в вывод.\nВ макрос добавляются команды /myOutput/disable <id> для снятых полей.", wraplength=600, justify="left").pack(fill="x", padx=4, pady=8)
+        lf_threads = ttk.LabelFrame(f, text="Параллелизм симуляции")
+        lf_threads.pack(fill="x", padx=8, pady=8)
+
+        ttk.Label(lf_threads, text="Количество потоков").grid(row=0, column=0, sticky="w", padx=4, pady=4)
+        self.num_threads_var = tk.StringVar(value="0")
+        ttk.Entry(lf_threads, textvariable=self.num_threads_var, width=10).grid(row=0, column=1, sticky="w", padx=4, pady=4)
+        ttk.Button(lf_threads, text="Макс.", command=self._set_max_threads).grid(row=0, column=2, padx=4, pady=4)
+        ttk.Label(lf_threads, text="0 = использовать максимальное число потоков.").grid(row=1, column=0, columnspan=3, sticky="w", padx=4, pady=4)
+        self.num_threads_var.trace_add("write", lambda *_: self._refresh_macro_preview())
 
     def _wheel_on(self):
         self.checks_canvas.bind_all("<MouseWheel>", self._scroll_checks)
@@ -744,7 +740,7 @@ class ProgramB(tk.Tk):
     def _build_misc_page(self):
         f = self.page_misc
 
-        lf_macro = ttk.LabelFrame(f, text="Макрос (обновляется автоматически)")
+        lf_macro = ttk.LabelFrame(f, text="Симуляция")
         lf_macro.pack(fill="both", expand=True, padx=8, pady=8)
 
         btn_frame = ttk.Frame(lf_macro)
@@ -754,6 +750,8 @@ class ProgramB(tk.Tk):
         self.abort_button = ttk.Button(btn_frame, text="Прервать симуляцию", command=self._abort_simulation, state="disabled")
         self.abort_button.pack(side="left", padx=2)
         ttk.Button(btn_frame, text="Сохранить .mac", command=self._save_macro_dialog).pack(side="left", padx=2)
+        self.macro_toggle_btn = ttk.Button(btn_frame, text="Показать макрос", command=self._toggle_macro_preview)
+        self.macro_toggle_btn.pack(side="left", padx=2)
 
         progress_frame = ttk.Frame(lf_macro)
         progress_frame.pack(fill="x", padx=4, pady=(0, 4))
@@ -763,7 +761,9 @@ class ProgramB(tk.Tk):
         self.progress_label.pack(anchor="w", pady=(2, 0))
 
         self.macro_text = scrolledtext.ScrolledText(lf_macro, height=8, font=self.font_mono)
-        self.macro_text.pack(fill="both", expand=True, padx=4, pady=4)
+        # по умолчанию скрыт
+        self._macro_visible = False
+
         ttk.Label(
             lf_macro,
             text="Порог времени распада снимается автоматически (/process/had/rdm/thresholdForVeryLongDecayTime 1e+60 year).\nЗапуск: main.exe run.mac в папке программы.",
@@ -966,8 +966,9 @@ class ProgramB(tk.Tk):
         return self._geometry_token() != "cylinder"
 
     def _update_geometry(self):
-        r = to_cm(self.radius_var.get(), self.radius_unit.get())
+        d = to_cm(self.diameter_var.get(), self.diameter_unit.get())
         h = to_cm(self.height_var.get(), self.height_unit.get())
+        r = (d / 2.0) if d is not None else None
         v = None
         if r is not None and h is not None and r > 0 and h > 0:
             v = math.pi * r * r * h
@@ -1090,7 +1091,7 @@ class ProgramB(tk.Tk):
         try:
             return self.decay_mode_var.get()
         except AttributeError:
-            return DECAY_MODES[0]
+            return DECAY_MODES[1]
 
     def _on_decay_mode_selected(self):
         mode = self._decay_mode()
@@ -1339,13 +1340,34 @@ class ProgramB(tk.Tk):
         seed = _py_random.SystemRandom().randint(1, 2147483647)
         self.fixed_seed_var.set(str(seed))
 
+    def _on_spectrum_toggle(self):
+        self._update_spectra_tab_visibility()
+        self._refresh_macro_preview()
+
+    def _update_spectra_tab_visibility(self):
+        if not hasattr(self, "notebook"):
+            return
+        try:
+            if self.spectrum_var.get():
+                self.notebook.tab(self.page_spectra, state="normal")
+            else:
+                try:
+                    if self.notebook.index(self.notebook.select()) == self.notebook.index(self.page_spectra):
+                        self.notebook.select(self.page_output)
+                except Exception:
+                    pass
+                self.notebook.tab(self.page_spectra, state="hidden")
+        except Exception:
+            pass
+
     # --- MACRO BUILDING ---
 
     def _build_macro(self):
-        radius_cm = to_cm(self.radius_var.get(), self.radius_unit.get())
+        diameter_cm = to_cm(self.diameter_var.get(), self.diameter_unit.get())
         height_cm = to_cm(self.height_var.get(), self.height_unit.get())
-        if radius_cm is None or radius_cm <= 0:
-            raise ValueError("Укажите положительный радиус.")
+        if diameter_cm is None or diameter_cm <= 0:
+            raise ValueError("Укажите положительный диаметр.")
+        radius_cm = diameter_cm / 2.0
         if height_cm is None or height_cm <= 0:
             raise ValueError("Укажите положительную высоту.")
 
@@ -1518,6 +1540,16 @@ class ProgramB(tk.Tk):
         lines.append("")
         return "\n".join(lines)
 
+    def _toggle_macro_preview(self):
+        if getattr(self, "_macro_visible", False):
+            self.macro_text.pack_forget()
+            self._macro_visible = False
+            self.macro_toggle_btn.config(text="Показать макрос")
+        else:
+            self.macro_text.pack(fill="both", expand=True, padx=4, pady=4)
+            self._macro_visible = True
+            self.macro_toggle_btn.config(text="Скрыть макрос")
+
     def _refresh_macro_preview(self):
         try:
             text = self._build_macro()
@@ -1563,8 +1595,8 @@ class ProgramB(tk.Tk):
             "variant": self._geometry_token(),
             "height": self.height_var.get(),
             "heightUnit": self.height_unit.get(),
-            "radius": self.radius_var.get(),
-            "radiusUnit": self.radius_unit.get(),
+            "diameter": self.diameter_var.get(),
+            "diameterUnit": self.diameter_unit.get(),
             "volume": self.volume_var.get(),
             "wall": self.wall_var.get(),
             "wallUnit": self.wall_unit.get(),
@@ -1590,7 +1622,7 @@ class ProgramB(tk.Tk):
             "randomSeed": self.random_seed_var.get() if hasattr(self, "random_seed_var") else True,
             "fixedSeed": self.fixed_seed_var.get() if hasattr(self, "fixed_seed_var") else "12345",
             "decay": {"count": self.decay_count_var.get(),
-                      "mode": self._decay_mode() if hasattr(self, "decay_mode_var") else DECAY_MODES[0],
+                      "mode": self._decay_mode() if hasattr(self, "decay_mode_var") else DECAY_MODES[1],
                       "activity": self.activity_var.get() if hasattr(self, "activity_var") else "1",
                       "activityUnit": self.activity_unit_var.get() if hasattr(self, "activity_unit_var") else "МБк",
                       "irrTime": self.irrtime_var.get() if hasattr(self, "irrtime_var") else "1",
@@ -1613,13 +1645,13 @@ class ProgramB(tk.Tk):
         if idx_v < 0:
             idx_v = 0
         self.geometry_combo.current(idx_v)
-        self.height_var.set(geo.get("height", "6.0"))
+        self.height_var.set(geo.get("height", "5.0"))
         self.height_unit.set(geo.get("heightUnit", "см"))
-        self.radius_var.set(geo.get("radius", "2.0"))
-        self.radius_unit.set(geo.get("radiusUnit", "см"))
+        self.diameter_var.set(geo.get("diameter", geo.get("radius", "1.0")))
+        self.diameter_unit.set(geo.get("diameterUnit", geo.get("radiusUnit", "см")))
         self.wall_var.set(geo.get("wall", "1.5"))
         self.wall_unit.set(geo.get("wallUnit", "мм"))
-        self.rim_var.set(geo.get("rim", "0"))
+        self.rim_var.set(geo.get("rim", "30"))
         self.rim_unit.set(geo.get("rimUnit", "мм"))
 
         mi = s.get("material", 0)
@@ -1661,9 +1693,9 @@ class ProgramB(tk.Tk):
         decay = s.get("decay", {})
         self.decay_count_var.set(decay.get("count", "1000000"))
         if hasattr(self, "decay_mode_var"):
-            mode = decay.get("mode", DECAY_MODES[0])
+            mode = decay.get("mode", DECAY_MODES[1])
             if mode not in DECAY_MODES:
-                mode = DECAY_MODES[0]
+                mode = DECAY_MODES[1]
             self.decay_mode_var.set(mode)
             self.decay_mode_combo.set(mode)
         if hasattr(self, "activity_var"):
@@ -1801,6 +1833,7 @@ class ProgramB(tk.Tk):
     def _sim_worker(self, exe, script_dir):
         tail = deque(maxlen=30)
         try:
+            _creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
             proc = subprocess.Popen(
                 [exe, "run.mac"],
                 cwd=script_dir,
@@ -1810,6 +1843,7 @@ class ProgramB(tk.Tk):
                 text=True,
                 encoding="utf-8",
                 errors="replace",
+                creationflags=_creationflags,
             )
             self._sim_proc = proc
             for line in iter(proc.stdout.readline, ""):
