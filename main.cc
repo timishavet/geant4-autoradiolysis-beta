@@ -2,9 +2,7 @@
 #include "DetectorConstruction.hh"
 #include "DetectorMessenger.hh"
 #include "SourceMessenger.hh"
-#include "OutputMessenger.hh"
 #include "SpectrumMessenger.hh"
-#include "OutputConfig.hh"
 #include "FTFP_BERT.hh"
 
 #include "G4RunManagerFactory.hh"
@@ -45,11 +43,6 @@ int main(int argc, char** argv)
         if (hwThreads == 0) hwThreads = G4Threading::G4GetNumberOfCores();
         if (hwThreads == 0) hwThreads = 2;  // ultimate fallback
         mtRM->SetNumberOfThreads(hwThreads);
-        OutputConfig::Instance().SetMT(true);
-        OutputConfig::Instance().SetNumThreads(static_cast<G4int>(hwThreads));
-    } else {
-        OutputConfig::Instance().SetMT(false);
-        OutputConfig::Instance().SetNumThreads(1);
     }
 
     // Detector + geometry/material messenger
@@ -57,10 +50,9 @@ int main(int argc, char** argv)
     runManager->SetUserInitialization(detector);
     new DetectorMessenger(detector);
 
-    // Source (radionuclide + activity) and output-selection messengers.
+    // Source (radionuclide + activity) and spectrum messengers.
     // Stateless singletons; safe to construct before /run/initialize.
     new SourceMessenger();
-    new OutputMessenger();
     new SpectrumMessenger();
 
     // Lift the G4RadioactiveDecay "very long decay time" threshold so that

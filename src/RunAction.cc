@@ -2,13 +2,14 @@
 #include "EventAction.hh"
 #include "MyRun.hh"
 #include "SourceConfig.hh"
-#include "OutputConfig.hh"
+
 #include "DetectorConfig.hh"
 #include "BetaSpectrumConfig.hh"
 
 #include "G4Material.hh"
 #include "G4Run.hh"
 #include "G4RunManager.hh"
+#include "G4MTRunManager.hh"
 #include "G4SystemOfUnits.hh"
 #include "G4ios.hh"
 
@@ -108,7 +109,7 @@ void RunAction::EndOfRunAction(const G4Run* run)
 #endif
         char ts[32];
         std::strftime(ts, sizeof(ts), "%Y-%m-%d %H:%M:%S", &tm_local);
-        std::ofstream outFile("results.txt", std::ios::out | std::ios::app);
+        std::ofstream outFile("run_result.txt", std::ios::out | std::ios::app);
         if (outFile.is_open()) {
             outFile << "=== WARNING @ " << ts << " ===\n";
             outFile << warnMsg << "\n\n";
@@ -122,9 +123,6 @@ void RunAction::EndOfRunAction(const G4Run* run)
 
 void RunAction::PrintAndSaveResults(const G4Run* run) const
 {
-    using Field = OutputConfig::Field;
-    auto& out = OutputConfig::Instance();
-
     const auto* myRun = static_cast<const MyRun*>(run);
     const G4int    nofEvents     = run->GetNumberOfEvent();
     const G4double edep          = myRun->GetEdep();
@@ -133,21 +131,14 @@ void RunAction::PrintAndSaveResults(const G4Run* run) const
     const G4double transferred   = myRun->GetTransferredEnergy();
     const G4double diff          = edep - transferred;
 
-    // Resolve geometry and material from DetectorConfig (single source of
-    // truth; the liquid solid may be a union, so reading it back from the
-    // logical volume store is unreliable).
     auto& cfg = DetectorConfig::Instance();
-    const G4double radius     = cfg.GetRadius();
-    const G4double halfHeight = cfg.GetHalfHeight();
     const G4double volume     = cfg.LiquidVolumeCm3() * cm3;
     const G4double density    = cfg.GetEffectiveDensity();
     const G4double mass       = volume * density;
-    const G4String materialName = cfg.GetMaterialName();
 
     const G4double doseA = (mass > 0.0) ? edep        / mass : 0.0;
     const G4double doseB = (mass > 0.0) ? transferred / mass : 0.0;
 
-    // Derived timing and per-decay values.
     double wallSeconds = 0.0;
     if (fTimerActive) {
         auto elapsed = std::chrono::steady_clock::now() - fStartTime;
@@ -156,95 +147,33 @@ void RunAction::PrintAndSaveResults(const G4Run* run) const
     const double avgPerEventMs = (nofEvents > 0) ? (wallSeconds * 1000.0 / nofEvents) : 0.0;
     const G4double energyPerDecay = (nofEvents > 0) ? (edep / nofEvents) : 0.0;
 
-    // Source configuration.
-    auto& src = SourceConfig::Instance();
-    const G4int    srcZ   = src.GetZ();
-    const G4int    srcA   = src.GetA();
-    const G4String srcName = src.GetRadionuclideName();
-    const G4double activityBq = src.GetActivity();
-    const G4double irrTimeS = src.GetIrrTime();
-
-    // Timestamp.
-    auto now = std::chrono::system_clock::now();
-    std::time_t now_c = std::chrono::system_clock::to_time_t(now);
-    std::tm tm_local{};
-#if defined(_WIN32)
-    localtime_s(&tm_local, &now_c);
-#else
-    localtime_r(&now_c, &tm_local);
-#endif
-    char ts[32];
-    std::strftime(ts, sizeof(ts), "%Y-%m-%d %H:%M:%S", &tm_local);
-
-    // Build the list of (label, formatted_value) pairs, filtered by
-    // OutputConfig. Each field appears here exactly once.
-    std::vector<std::pair<G4String, G4String>> lines;
-    auto add = [&](Field f, const G4String& label, const G4String& value) {
-        if (out.IsEnabled(f)) lines.emplace_back(label, value);
-    };
-
-    add(Field::Timestamp,         "Date/time:           ", G4String(ts));
-    add(Field::Radionuclide,      "Radionuclide:        ",
-        srcName + " (Z=" + std::to_string(srcZ) + ", A=" + std::to_string(srcA) + ")");
-    add(Field::NumEvents,         "Number of decays:    ", std::to_string(nofEvents));
-    add(Field::Activity,          "Source activity:     ",
-        (activityBq > 0.0 ? FormatValue(activityBq / CLHEP::becquerel, "Bq") : G4String("not set")));
-    add(Field::IrrTime,           "Irradiation time:    ",
-        (irrTimeS > 0.0 ? FormatValue(irrTimeS / CLHEP::second, "s") : G4String("not set")));
-    add(Field::GeometryVariant,   "Geometry variant:    ", cfg.GetGeometryName());
-    add(Field::Dimensions,        "Cylinder radius:     ", FormatValue(radius / cm, "cm"));
-    add(Field::Dimensions,        "Cylinder height:     ", FormatValue((2.0 * halfHeight) / cm, "cm"));
-    add(Field::Volume,            "Volume:              ", FormatValue(volume / cm3, "cm3"));
-    add(Field::MaterialName,      "Material:            ", materialName);
-    add(Field::MaterialDensity,   "Material density:    ", FormatValue(density / (g / cm3), "g/cm3"));
-    add(Field::Mass,              "Material mass:       ", FormatValue(mass / g, "g"));
-    if (cfg.GetGeometryType() != DetectorConfig::GeometryType::Cylinder) {
-        add(Field::WallThickness, "Glass wall:          ", FormatValue(cfg.GetGlassWall() / cm, "cm"));
-        add(Field::Rim,           "Dry rim above:       ", FormatValue(cfg.GetRim() / cm, "cm"));
-        add(Field::GlassMaterial, "Glass material:      ",
-            cfg.GetGlassMaterialName() + " (" +
-            FormatValue(cfg.GetGlassEffectiveDensity() / (g / cm3), "g/cm3") + ")");
+    std::ofstream outFile("run_result.txt", std::ios::out | std::ios::trunc);
+    if (outFile.is_open()) {
+        outFile << "Number of decays:    " << nofEvents << "\n";
+        outFile << "Energy deposit (A):  " << FormatValue(edep / MeV, "MeV") << "\n";
+        outFile << "Absorbed dose (A):   " << FormatValue(doseA / gray, "Gy") << "\n";
+        outFile << "Decay energy (B):    " << FormatValue(decayEnergy / MeV, "MeV") << "\n";
+        outFile << "Escaped energy (B):  " << FormatValue(escapedEnergy / MeV, "MeV") << "\n";
+        outFile << "Transferred (B):     " << FormatValue(transferred / MeV, "MeV") << "\n";
+        outFile << "Absorbed dose (B):   " << FormatValue(doseB / gray, "Gy") << "\n";
+        outFile << "Cross-check (A-B):   " << FormatValue(diff / MeV, "MeV") << "\n";
+        outFile << "Energy per decay:    " << FormatValue(energyPerDecay / MeV, "MeV") << "\n";
+        outFile << "Wall time:           " << FormatValue(wallSeconds, "s") << "\n";
+        outFile << "Avg time per event:  " << FormatValue(avgPerEventMs, "ms") << "\n";
+        G4int nThreads = 1;
+        if (auto* mt = G4MTRunManager::GetMasterRunManager()) nThreads = mt->GetNumberOfThreads();
+        outFile << "Number of threads:   " << nThreads << "\n";
+        outFile.close();
     }
-    // Separator between setup info and simulated results. Its position is
-    // captured before the first results field, so it stays correct even
-    // when the user disables some output fields.
-    const std::size_t resultsBegin = lines.size();
-    add(Field::EdepEnergy,        "Energy deposit (A):  ", FormatValue(edep / MeV, "MeV"));
-    add(Field::EdepDose,          "Absorbed dose (A):   ", FormatValue(doseA / gray, "Gy"));
-    add(Field::DecayEnergy,       "Decay energy (B):    ", FormatValue(decayEnergy / MeV, "MeV"));
-    add(Field::EscapedEnergy,     "Escaped energy (B):  ", FormatValue(escapedEnergy / MeV, "MeV"));
-    add(Field::TransferredEnergy, "Transferred (B):     ", FormatValue(transferred / MeV, "MeV"));
-    add(Field::PathBDose,         "Absorbed dose (B):   ", FormatValue(doseB / gray, "Gy"));
-    add(Field::CrossCheck,        "Cross-check (A-B):   ", FormatValue(diff / MeV, "MeV"));
-    add(Field::EnergyPerDecay,    "Energy per decay:    ", FormatValue(energyPerDecay / MeV, "MeV"));
-    if (lines.size() > resultsBegin) {
-        lines.insert(lines.begin() + resultsBegin, {"", "=== Simulation results ==="});
-    }
-    add(Field::ThreadingMode,     "Threading mode:      ",
-        G4String(out.IsMT() ? "Multi-threaded" : "Single-threaded"));
-    add(Field::NumThreads,        "Number of threads:   ", std::to_string(out.GetNumThreads()));
-    add(Field::SimWallTime,       "Wall time:           ", FormatValue(wallSeconds, "s"));
-    add(Field::AvgTimePerEvent,   "Avg time per event:  ", FormatValue(avgPerEventMs, "ms"));
 
-    // ----- Console output -----
     G4cout << "\n========================================" << G4endl;
     G4cout << "  SIMULATION RESULTS"                     << G4endl;
     G4cout << "========================================" << G4endl;
-    for (const auto& [label, value] : lines) {
-        G4cout << label << value << G4endl;
-    }
+    G4cout << "Number of decays:    " << nofEvents << G4endl;
+    G4cout << "Energy deposit (A):  " << FormatValue(edep / MeV, "MeV") << G4endl;
+    G4cout << "Absorbed dose (A):   " << FormatValue(doseA / gray, "Gy") << G4endl;
+    G4cout << "Cross-check (A-B):   " << FormatValue(diff / MeV, "MeV") << G4endl;
     G4cout << "========================================\n" << G4endl;
-
-    // ----- Append to results.txt with timestamp -----
-    std::ofstream outFile("results.txt", std::ios::out | std::ios::app);
-    if (outFile.is_open()) {
-        outFile << "=== Run @ " << ts << " ===\n";
-        for (const auto& [label, value] : lines) {
-            outFile << label << value << "\n";
-        }
-        outFile << "\n";
-        outFile.close();
-    }
 }
 
 void RunAction::WriteBetaSpectra(const G4Run* run) const
@@ -310,7 +239,7 @@ void RunAction::WriteBetaSpectra(const G4Run* run) const
            << myRun->GetBetaPlus().size()
            << " beta+ -> " << spec.GetFilePlus() << G4endl;
 
-    std::ofstream outFile("results.txt", std::ios::out | std::ios::app);
+    std::ofstream outFile("run_result.txt", std::ios::out | std::ios::app);
     if (outFile.is_open()) {
         outFile << "Beta- entries: " << myRun->GetBetaMinus().size()
                 << " -> " << spec.GetFileMinus() << "\n";

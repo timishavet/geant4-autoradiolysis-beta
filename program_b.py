@@ -49,30 +49,31 @@ GEOMETRY_VARIANTS = [
 ]
 
 OUTPUT_FIELDS = [
-    {"id":"material_name",      "label":"Наименование среды",                         "group":"medium",      "def":True},
-    {"id":"material_density",   "label":"Плотность среды (г/см³)",                    "group":"medium",      "def":True},
-    {"id":"mass",               "label":"Масса (г)",                                  "group":"medium",      "def":True},
+    {"id":"material_name",      "label":"Наименование среды",                         "group":"medium",      "def":False},
+    {"id":"material_density",   "label":"Плотность среды (г/см³)",                    "group":"medium",      "def":False},
+    {"id":"mass",               "label":"Масса (г)",                                  "group":"medium",      "def":False},
     {"id":"volume",             "label":"Объём (см³)",                                "group":"medium",      "def":True},
     {"id":"dimensions",         "label":"Размеры цилиндра (см)",                      "group":"medium",      "def":False},
-    {"id":"geometry_variant",   "label":"Вариант геометрии",                          "group":"geometry",    "def":True},
-    {"id":"wall_thickness",     "label":"Толщина стенки оболочки (см)",               "group":"geometry",    "def":True},
-    {"id":"rim",                "label":"Сухой бортик над жидкостью (см)",            "group":"geometry",    "def":True},
-    {"id":"glass_material",     "label":"Материал оболочки",                          "group":"geometry",    "def":True},
+    {"id":"geometry_variant",   "label":"Вариант геометрии",                          "group":"geometry",    "def":False},
+    {"id":"wall_thickness",     "label":"Толщина стенки оболочки (см)",               "group":"geometry",    "def":False},
+    {"id":"rim",                "label":"Сухой бортик над жидкостью (см)",            "group":"geometry",    "def":False},
+    {"id":"glass_material",     "label":"Материал оболочки",                          "group":"geometry",    "def":False},
     {"id":"radionuclide",       "label":"Радионуклид (Z, A, имя)",                    "group":"radionuclide","def":True},
-    {"id":"activity",           "label":"Активность источника (Бк)",                  "group":"radionuclide","def":True},
-    {"id":"irr_time",           "label":"Время облучения (с)",                        "group":"radionuclide","def":True},
-    {"id":"num_events",         "label":"Число распадов",                             "group":"results",     "def":True},
-    {"id":"edep_energy",        "label":"Поглощённая энергия (МэВ) — Path A",         "group":"results",     "def":True},
+    {"id":"activity",           "label":"Активность источника (Бк)",                  "group":"radionuclide","def":False},
+    {"id":"irr_time",           "label":"Время облучения (с)",                        "group":"radionuclide","def":False},
+    {"id":"num_events",         "label":"Число распадов",                             "group":"results",     "def":False},
+    {"id":"edep_energy",        "label":"Поглощённая энергия (МэВ) — Path A",         "group":"results",     "def":False},
     {"id":"edep_dose",          "label":"Поглощённая доза (Гр) — Path A",             "group":"results",     "def":True},
-    {"id":"decay_energy",       "label":"Энергия распада (МэВ) — Path B in",          "group":"results",     "def":True},
-    {"id":"escaped_energy",     "label":"Убежавшая энергия (МэВ) — Path B out",       "group":"results",     "def":True},
-    {"id":"transferred_energy", "label":"Переданная энергия (МэВ) — Path B net",      "group":"results",     "def":True},
+    {"id":"decay_energy",       "label":"Энергия распада (МэВ) — Path B in",          "group":"results",     "def":False},
+    {"id":"escaped_energy",     "label":"Убежавшая энергия (МэВ) — Path B out",       "group":"results",     "def":False},
+    {"id":"transferred_energy", "label":"Переданная энергия (МэВ) — Path B net",      "group":"results",     "def":False},
     {"id":"path_b_dose",        "label":"Доза Path B (Гр)",                           "group":"results",     "def":True},
-    {"id":"cross_check",        "label":"Cross-check A−B (МэВ)",                      "group":"results",     "def":True},
+    {"id":"relative_error",     "label":"Относительная погрешность (%)",               "group":"results",     "def":True},
+    {"id":"cross_check",        "label":"Cross-check A−B (Гр)",                       "group":"results",     "def":True},
     {"id":"energy_per_decay",   "label":"Энергия на распад (МэВ)",                    "group":"results",     "def":False},
-    {"id":"timestamp",          "label":"Дата и время",                               "group":"simconfig",   "def":True},
-    {"id":"threading_mode",     "label":"Режим поточности",                           "group":"simconfig",   "def":True},
-    {"id":"num_threads",        "label":"Число потоков",                              "group":"simconfig",   "def":True},
+    {"id":"timestamp",          "label":"Дата и время",                               "group":"simconfig",   "def":False},
+    {"id":"threading_mode",     "label":"Режим поточности",                           "group":"simconfig",   "def":False},
+    {"id":"num_threads",        "label":"Число потоков",                              "group":"simconfig",   "def":False},
     {"id":"sim_wall_time",      "label":"Время симуляции (с)",                        "group":"simconfig",   "def":False},
     {"id":"avg_time_per_event", "label":"Среднее время на событие (мс)",              "group":"simconfig",   "def":False},
 ]
@@ -270,6 +271,10 @@ class ProgramB(tk.Tk):
         self._update_geometry()
         self._on_decay_mode_selected()
         self._update_spectra_tab_visibility()
+        if hasattr(self, "_update_rel_error_count"):
+            self._update_rel_error_count()
+        if hasattr(self, "_update_rel_error_act"):
+            self._update_rel_error_act()
         if hasattr(self, "random_seed_var"):
             self._on_seed_mode_changed()
         else:
@@ -601,18 +606,24 @@ class ProgramB(tk.Tk):
         ttk.Entry(self.count_frame, textvariable=self.decay_count_var).grid(row=0, column=1, sticky="ew", padx=4, pady=4)
         ttk.Label(self.count_frame, text="Программа выполнит ровно N событий: /run/beamOn N").grid(row=1, column=0, columnspan=2, sticky="w", padx=4, pady=4)
 
+        self.scale_enabled_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(self.count_frame, text="Масштабировать (симулировать по погрешности)",
+                        variable=self.scale_enabled_var,
+                        command=self._update_rel_error_count).grid(row=2, column=0, columnspan=2, sticky="w", padx=4, pady=(4, 0))
+
         relf = ttk.Frame(self.count_frame)
-        relf.grid(row=2, column=0, columnspan=2, sticky="ew", padx=4, pady=(4, 0))
+        relf.grid(row=3, column=0, columnspan=2, sticky="ew", padx=4, pady=(4, 0))
         ttk.Label(relf, text="Относительная погрешность, %").pack(side="left", padx=(0, 8))
-        self.rel_error_count_var = tk.StringVar(value="")
-        ttk.Entry(relf, textvariable=self.rel_error_count_var, width=10).pack(side="left")
+        self.rel_error_count_var = tk.StringVar(value="0.1")
+        self.rel_error_count_entry = ttk.Entry(relf, textvariable=self.rel_error_count_var, width=10)
+        self.rel_error_count_entry.pack(side="left")
         ttk.Label(relf, text="(минимум 0,0025 %; ε = 1/√N)").pack(side="left", padx=(8, 0))
 
         self.rel_error_count_info_var = tk.StringVar(value="")
-        ttk.Label(self.count_frame, textvariable=self.rel_error_count_info_var, wraplength=600, justify="left", style="Mono.TLabel").grid(row=3, column=0, columnspan=2, sticky="w", padx=4, pady=4)
+        ttk.Label(self.count_frame, textvariable=self.rel_error_count_info_var, wraplength=600, justify="left", style="Mono.TLabel").grid(row=4, column=0, columnspan=2, sticky="w", padx=4, pady=4)
 
         self.count_warn_var = tk.StringVar(value="")
-        ttk.Label(self.count_frame, textvariable=self.count_warn_var, foreground="#B00020", wraplength=600, justify="left").grid(row=4, column=0, columnspan=2, sticky="w", padx=4, pady=4)
+        ttk.Label(self.count_frame, textvariable=self.count_warn_var, foreground="#B00020", wraplength=600, justify="left").grid(row=5, column=0, columnspan=2, sticky="w", padx=4, pady=4)
         self.count_frame.columnconfigure(1, weight=1)
 
         self.act_frame = ttk.LabelFrame(f, text="По активности и времени")
@@ -648,23 +659,28 @@ class ProgramB(tk.Tk):
         self.act_halflife_var = tk.StringVar(value="T1/2: —")
         ttk.Label(self.act_frame, textvariable=self.act_halflife_var, wraplength=600, justify="left", style="Mono.TLabel").grid(row=3, column=0, columnspan=2, sticky="w", padx=4, pady=4)
 
+        ttk.Checkbutton(self.act_frame, text="Масштабировать (симулировать по погрешности)",
+                        variable=self.scale_enabled_var,
+                        command=self._update_rel_error_act).grid(row=4, column=0, columnspan=2, sticky="w", padx=4, pady=(4, 0))
+
         relf2 = ttk.Frame(self.act_frame)
-        relf2.grid(row=4, column=0, columnspan=2, sticky="ew", padx=4, pady=(4, 0))
+        relf2.grid(row=5, column=0, columnspan=2, sticky="ew", padx=4, pady=(4, 0))
         ttk.Label(relf2, text="Относительная погрешность, %").pack(side="left", padx=(0, 8))
-        self.rel_error_act_var = tk.StringVar(value="")
-        ttk.Entry(relf2, textvariable=self.rel_error_act_var, width=10).pack(side="left")
+        self.rel_error_act_var = tk.StringVar(value="0.1")
+        self.rel_error_act_entry = ttk.Entry(relf2, textvariable=self.rel_error_act_var, width=10)
+        self.rel_error_act_entry.pack(side="left")
         ttk.Label(relf2, text="(минимум 0,0025 %)").pack(side="left", padx=(8, 0))
 
         self.rel_error_act_info_var = tk.StringVar(value="")
-        ttk.Label(self.act_frame, textvariable=self.rel_error_act_info_var, wraplength=600, justify="left", style="Mono.TLabel").grid(row=5, column=0, columnspan=2, sticky="w", padx=4, pady=4)
+        ttk.Label(self.act_frame, textvariable=self.rel_error_act_info_var, wraplength=600, justify="left", style="Mono.TLabel").grid(row=6, column=0, columnspan=2, sticky="w", padx=4, pady=4)
 
         self.act_warn_var = tk.StringVar(value="")
-        ttk.Label(self.act_frame, textvariable=self.act_warn_var, foreground="#B00020", wraplength=600, justify="left").grid(row=6, column=0, columnspan=2, sticky="w", padx=4, pady=4)
+        ttk.Label(self.act_frame, textvariable=self.act_warn_var, foreground="#B00020", wraplength=600, justify="left").grid(row=7, column=0, columnspan=2, sticky="w", padx=4, pady=4)
         ttk.Label(self.act_frame, text="Число событий N вычисляется с учетом распада источника за время облучения.", wraplength=600, justify="left").grid(row=7, column=0, columnspan=2, sticky="w", padx=4, pady=4)
 
-        self.decay_count_var.trace_add("write", lambda *_: (self._update_decay_warnings(), self._refresh_macro_preview()))
-        self.activity_var.trace_add("write", lambda *_: (self._update_decay_warnings(), self._refresh_macro_preview()))
-        self.irrtime_var.trace_add("write", lambda *_: (self._update_decay_warnings(), self._refresh_macro_preview()))
+        self.decay_count_var.trace_add("write", lambda *_: (self._update_decay_warnings(), self._update_rel_error_count(), self._refresh_macro_preview()))
+        self.activity_var.trace_add("write", lambda *_: (self._update_decay_warnings(), self._update_rel_error_act(), self._refresh_macro_preview()))
+        self.irrtime_var.trace_add("write", lambda *_: (self._update_decay_warnings(), self._update_rel_error_act(), self._refresh_macro_preview()))
         self.activity_unit_combo.bind("<<ComboboxSelected>>", lambda _: (self._update_decay_warnings(), self._refresh_macro_preview()))
         self.irrtime_unit_combo.bind("<<ComboboxSelected>>", lambda _: (self._update_decay_warnings(), self._refresh_macro_preview()))
         if hasattr(self, "rel_error_count_var"):
@@ -768,7 +784,7 @@ class ProgramB(tk.Tk):
         f = self.page_misc
 
         lf_macro = ttk.LabelFrame(f, text="Симуляция")
-        lf_macro.pack(fill="both", expand=True, padx=8, pady=8)
+        lf_macro.pack(fill="x", padx=8, pady=8)
 
         btn_frame = ttk.Frame(lf_macro)
         btn_frame.pack(fill="x", padx=4, pady=(4, 2))
@@ -790,10 +806,9 @@ class ProgramB(tk.Tk):
         self.macro_text = scrolledtext.ScrolledText(lf_macro, height=8, font=self.font_mono)
         # по умолчанию скрыт
         self._macro_visible = False
-
         ttk.Label(
             lf_macro,
-            text="Порог времени распада снимается автоматически (/process/had/rdm/thresholdForVeryLongDecayTime 1e+60 year).\nЗапуск: main.exe run.mac в папке программы.",
+            text="Запуск: main.exe run.mac в папке программы.",
             foreground="#555555",
             justify="left",
         ).pack(anchor="w", padx=4, pady=(0, 4))
@@ -804,7 +819,7 @@ class ProgramB(tk.Tk):
         btn_frame2.pack(fill="x", padx=4, pady=4)
         ttk.Button(btn_frame2, text="Прочитать results.txt", command=self._read_result).pack(side="left", padx=2)
         ttk.Button(btn_frame2, text="Выбрать results.txt", command=self._load_result_file).pack(side="left", padx=2)
-        self.result_text = scrolledtext.ScrolledText(lf_result, height=14, font=self.font_mono)
+        self.result_text = scrolledtext.ScrolledText(lf_result, height=14, font=("Consolas", 14))
         self.result_text.pack(fill="both", expand=True, padx=4, pady=4)
 
     # --- СПЕКТРЫ ---
@@ -1132,6 +1147,10 @@ class ProgramB(tk.Tk):
         else:
             if "num_events" in self.output_checkvars:
                 self.output_checkvars["num_events"].set(True)
+            if "activity" in self.output_checkvars:
+                self.output_checkvars["activity"].set(False)
+            if "irr_time" in self.output_checkvars:
+                self.output_checkvars["irr_time"].set(False)
         self._update_decay_visibility()
         self._refresh_macro_preview()
 
@@ -1193,8 +1212,9 @@ class ProgramB(tk.Tk):
                 raise ValueError("Укажите целое число распадов не меньше 1.")
             if n < 1:
                 raise ValueError("Укажите целое число распадов не меньше 1.")
-            if n > NMAX_EVENTS:
-                raise ValueError(f"Число распадов {n} превышает лимит {NMAX_EVENTS}. Уменьшите число распадов.")
+            scale = getattr(self, "scale_enabled_var", None) and self.scale_enabled_var.get()
+            if not scale and n > NMAX_EVENTS:
+                raise ValueError(f"Число распадов {n} превышает лимит {NMAX_EVENTS}. Включите масштабирование или уменьшите число.")
             return (n, {"mode": "count"})
         nuc = self._current_nuclide()
         if nuc is None:
@@ -1211,8 +1231,9 @@ class ProgramB(tk.Tk):
         n = compute_decays_from_activity(a_bq, t_s, hl)
         if n < 1:
             raise ValueError("При таких активности и времени число распадов меньше 1. Увеличьте активность или время.")
-        if n > NMAX_EVENTS:
-            raise ValueError(f"Число распадов {n} превышает лимит {NMAX_EVENTS}. Уменьшите активность или время.")
+        scale = getattr(self, "scale_enabled_var", None) and self.scale_enabled_var.get()
+        if not scale and n > NMAX_EVENTS:
+            raise ValueError(f"Число распадов {n} превышает лимит {NMAX_EVENTS}. Включите масштабирование или уменьшите активность/время.")
         return (n, {"mode": "activity", "a_bq": a_bq, "t_s": t_s, "hl": hl})
 
     def _update_decay_warnings(self):
@@ -1223,8 +1244,8 @@ class ProgramB(tk.Tk):
             n = int(float(s)) if s is not None else 0
         except (ValueError, TypeError):
             n = 0
-        if n > NMAX_EVENTS:
-            self.count_warn_var.set(f"Число распадов {n} превышает лимит {NMAX_EVENTS}. Уменьшите число распадов.")
+        if n < 1 and n != 0:
+            self.count_warn_var.set("Укажите число распадов не меньше 1.")
         else:
             self.count_warn_var.set("")
         if not hasattr(self, "act_warn_var"):
@@ -1255,22 +1276,19 @@ class ProgramB(tk.Tk):
             return
         self.decay_computed_var.set(f"N = {n_raw}")
         self.act_halflife_var.set("T1/2: " + format_halflife_ru(hl_raw))
-        if n_raw > NMAX_EVENTS:
-            self.act_warn_var.set(f"Число распадов {n_raw} превышает лимит {NMAX_EVENTS}. Уменьшите активность или время.")
-        elif n_raw < 1:
+        if n_raw < 1:
             self.act_warn_var.set("")
             self.decay_computed_var.set("N = — (меньше 1: увеличьте активность или время)")
         else:
             self.act_warn_var.set("")
 
     def _rel_error_to_n(self, pct_str):
+        # returns required N or None
         try:
             pct = float(str(pct_str).replace(",", "."))
         except (ValueError, TypeError):
             return None
-        if pct < REL_ERROR_MIN_PERCENT:
-            return None
-        if pct > 100:
+        if pct < REL_ERROR_MIN_PERCENT or pct > 100:
             return None
         eps = pct / 100.0
         if eps <= 0:
@@ -1280,13 +1298,73 @@ class ProgramB(tk.Tk):
             n = 1
         return n
 
+    def _sim_n_and_k(self):
+        """Returns (N_sim, K, N_target)."""
+        if self._decay_mode() == DECAY_MODES[0]:
+            # count mode
+            try:
+                n_target = int(float(format_number(self.decay_count_var.get()) or 0))
+            except (ValueError, TypeError):
+                n_target = 0
+            if n_target < 1:
+                n_target = 1
+            scale = getattr(self, "scale_enabled_var", None) and self.scale_enabled_var.get()
+            if not scale:
+                n_sim = min(n_target, NMAX_EVENTS)
+                if n_sim < 1:
+                    n_sim = 1
+                return n_sim, 1.0, n_target
+            n_req = self._rel_error_to_n(getattr(self, "rel_error_count_var", None).get() if hasattr(self, "rel_error_count_var") else "")
+            if n_req is None:
+                n_req = NMAX_EVENTS + 1
+            n_sim = min(n_target, n_req, NMAX_EVENTS)
+            if n_sim < 1:
+                n_sim = 1
+            k = (n_target / n_sim) if n_sim > 0 else 1.0
+            return n_sim, k, n_target
+        # activity mode
+        raw = self._raw_activity_n()
+        if raw is None or raw[0] is None:
+            return 1, 1.0, 1
+        n_target = raw[0]
+        if n_target < 1:
+            n_target = 1
+        scale = getattr(self, "scale_enabled_var", None) and self.scale_enabled_var.get()
+        if not scale:
+            n_sim = min(n_target, NMAX_EVENTS)
+            if n_sim < 1:
+                n_sim = 1
+            return n_sim, 1.0, n_target
+        n_req = self._rel_error_to_n(getattr(self, "rel_error_act_var", None).get() if hasattr(self, "rel_error_act_var") else "")
+        if n_req is None:
+            n_req = NMAX_EVENTS + 1
+        n_sim = min(n_target, n_req, NMAX_EVENTS)
+        if n_sim < 1:
+            n_sim = 1
+        k = (n_target / n_sim) if n_sim > 0 else 1.0
+        return n_sim, k, n_target
+
     def _update_rel_error_count(self):
         if not hasattr(self, "rel_error_count_info_var"):
+            return
+        scale = getattr(self, "scale_enabled_var", None) and self.scale_enabled_var.get()
+        if hasattr(self, "rel_error_count_entry"):
+            self.rel_error_count_entry.config(state=("normal" if scale else "disabled"))
+        try:
+            n_target = int(float(format_number(self.decay_count_var.get()) or 0))
+        except (ValueError, TypeError):
+            n_target = 0
+        if n_target < 1:
+            n_target = 1
+        if not scale:
+            if n_target > NMAX_EVENTS:
+                self.rel_error_count_info_var.set(f"N_цель = {n_target:,}".replace(",", " ") + f"\nПревышает лимит {NMAX_EVENTS}. Включите масштабирование или уменьшите N.")
+            else:
+                self.rel_error_count_info_var.set(f"N_цель = {n_target:,}".replace(",", " ") + "\nМасштабирование отключено, K = 1.")
             return
         n_req = self._rel_error_to_n(self.rel_error_count_var.get())
         if n_req is None:
             self.rel_error_count_info_var.set("")
-            # validate minimum
             try:
                 pct = float(str(self.rel_error_count_var.get()).replace(",", "."))
             except (ValueError, TypeError):
@@ -1294,23 +1372,28 @@ class ProgramB(tk.Tk):
             if pct is not None and pct < REL_ERROR_MIN_PERCENT:
                 self.rel_error_count_info_var.set(f"Минимум {REL_ERROR_MIN_PERCENT} %.")
             return
-        n_sim = min(n_req, NMAX_EVENTS)
-        k = (n_req / n_sim) if n_sim > 0 else 1.0
+        n_sim = min(n_target, n_req, NMAX_EVENTS)
+        if n_sim < 1:
+            n_sim = 1
+        k = (n_target / n_sim) if n_sim > 0 else 1.0
         ach_pct = 100.0 / math.sqrt(n_sim) if n_sim > 0 else 0.0
-        # update decay count if changed
-        if self.decay_count_var.get() != str(n_sim):
-            self.decay_count_var.set(str(n_sim))
-        lines = [f"N_треб = {n_req:,}".replace(",", " "),
+        lines = [f"N_цель  = {n_target:,}".replace(",", " "),
+                 f"N_треб = {n_req:,}".replace(",", " "),
                  f"N_сим   = {n_sim:,}".replace(",", " "),
                  f"K       = {k:.4f}",
                  f"Достигнутая погрешность: {ach_pct:.4f} %"]
+        if n_target > n_req:
+            lines.append("Целевое N больше требуемого по погрешности - результат будет умножен на K = N_цель/N_треб")
         if n_req > NMAX_EVENTS:
-            lines.append("Требуемое N превышает лимит Geant4 — примените K к результатам (доза, энергия).")
+            lines.append("Требуемое N превышает лимит Geant4.")
         self.rel_error_count_info_var.set("\n".join(lines))
 
     def _update_rel_error_act(self):
         if not hasattr(self, "rel_error_act_info_var"):
             return
+        scale = getattr(self, "scale_enabled_var", None) and self.scale_enabled_var.get()
+        if hasattr(self, "rel_error_act_entry"):
+            self.rel_error_act_entry.config(state=("normal" if scale else "disabled"))
         n_req = self._rel_error_to_n(self.rel_error_act_var.get())
         if n_req is None:
             self.rel_error_act_info_var.set("")
@@ -1332,16 +1415,27 @@ class ProgramB(tk.Tk):
         if n_fact < 1:
             self.rel_error_act_info_var.set(f"N_треб = {n_req:,}".replace(",", " ") + "\nN < 1: увеличьте активность или время.")
             return
-        k = (n_req / n_fact) if n_fact > 0 and n_req > n_fact else 1.0
-        ach_pct = 100.0 / math.sqrt(n_fact) if n_fact > 0 else 0.0
-        lines = [f"N_треб = {n_req:,}".replace(",", " "),
-                 f"N_факт = {n_fact:,}".replace(",", " "),
+        if not scale:
+            if n_fact > NMAX_EVENTS:
+                self.rel_error_act_info_var.set(f"N_цель = {n_fact:,}".replace(",", " ") + f"\nПревышает лимит {NMAX_EVENTS}. Включите масштабирование или уменьшите активность/время.")
+            else:
+                self.rel_error_act_info_var.set(f"N_цель = {n_fact:,}".replace(",", " ") + "\nМасштабирование отключено, K = 1.")
+            return
+        n_target = n_fact
+        n_sim = min(n_target, n_req, NMAX_EVENTS)
+        if n_sim < 1:
+            n_sim = 1
+        k = (n_target / n_sim) if n_sim > 0 else 1.0
+        ach_pct = 100.0 / math.sqrt(n_sim) if n_sim > 0 else 0.0
+        lines = [f"N_цель  = {n_target:,}".replace(",", " "),
+                 f"N_треб = {n_req:,}".replace(",", " "),
+                 f"N_сим   = {n_sim:,}".replace(",", " "),
                  f"K       = {k:.4f}",
                  f"Достигнутая погрешность: {ach_pct:.4f} %"]
+        if n_target > n_req:
+            lines.append("Целевое N больше требуемого по погрешности - результат будет умножен на K = N_цель/N_треб")
         if n_fact < n_req:
             lines.append("N меньше требуемого: увеличьте активность/время или примите большую погрешность.")
-        elif k > 1.0:
-            lines.append("Примените K к результатам (доза, энергия).")
         self.rel_error_act_info_var.set("\n".join(lines))
 
     def _raw_activity_n(self):
@@ -1376,8 +1470,6 @@ class ProgramB(tk.Tk):
         if err:
             raise ValueError(err)
         n = compute_decays_from_activity(a_bq, t_s, hl)
-        if n > NMAX_EVENTS:
-            raise ValueError(f"Число распадов {n} превышает лимит {NMAX_EVENTS}. Уменьшите активность или время.")
         return (n, {"hl": hl})
 
     def _halflife_for_display(self):
@@ -1552,7 +1644,10 @@ class ProgramB(tk.Tk):
                 shell_lines.append(glass_density_line)
 
         n_events, decay_info = self._effective_decays()
-        beam_on_n = str(n_events)
+        n_sim, k_scale, n_target = self._sim_n_and_k()
+        beam_on_n = str(n_sim)
+        self._scale_factor = k_scale
+        self._target_n = n_target
         activity_line = ""
         irrtime_line = ""
         decay_comment = ""
@@ -1581,18 +1676,8 @@ class ProgramB(tk.Tk):
             except Exception:
                 pass
 
-        unchecked = [fid for fid, var in self.output_checkvars.items() if not var.get()]
-        if self._decay_mode() == DECAY_MODES[0]:
-            for fid in ("activity", "irr_time"):
-                if fid in self.output_checkvars and fid not in unchecked:
-                    unchecked.append(fid)
-        all_ids = list(self.output_checkvars.keys())
-        output_lines = []
-        if unchecked and len(unchecked) < len(all_ids):
-            output_lines.append("/myOutput/enableAll")
-            for fid in unchecked:
-                output_lines.append(f"/myOutput/disable {fid}")
-
+        # Output field selection is now handled by the interface when
+        # formatting results.txt (C++ no longer supports /myOutput/*).
         spec_on = (getattr(self, "spectrum_var", None) is not None
                    and self.spectrum_var.get())
         spectrum_lines = []
@@ -1639,11 +1724,12 @@ class ProgramB(tk.Tk):
             lines.append(irrtime_line)
         if thread_line:
             lines.append(thread_line)
-        lines.extend(output_lines)
         lines.extend(spectrum_lines)
         lines.append(seed_line)
         lines.append("/run/initialize")
         lines.append("/process/had/rdm/thresholdForVeryLongDecayTime 1.0e+60 year")
+        if getattr(self, "_scale_factor", 1.0) and self._scale_factor > 1.0:
+            lines.append(f"# Масштабирование: K={self._scale_factor:.6f}, целевое N={self._target_n}")
         lines.append(f"/run/beamOn {beam_on_n}")
         lines.append("")
         return "\n".join(lines)
@@ -1654,7 +1740,7 @@ class ProgramB(tk.Tk):
             self._macro_visible = False
             self.macro_toggle_btn.config(text="Показать макрос")
         else:
-            self.macro_text.pack(fill="both", expand=True, padx=4, pady=4)
+            self.macro_text.pack(fill="x", padx=4, pady=4)
             self._macro_visible = True
             self.macro_toggle_btn.config(text="Скрыть макрос")
 
@@ -1857,9 +1943,332 @@ class ProgramB(tk.Tk):
         rest.reverse()
         return head + "".join(rest)
 
+    def _scale_results_file(self, path, k, n_target):
+        with open(path, "r", encoding="utf-8") as f:
+            text = f.read()
+        idx = text.rfind("===")
+        if idx < 0:
+            idx = 0
+        head = text[:idx]
+        tail = text[idx:]
+        scale_fields = {
+            "Energy deposit (A)": True,
+            "Absorbed dose (A)": True,
+            "Decay energy (B)": True,
+            "Escaped energy (B)": True,
+            "Transferred (B)": True,
+            "Absorbed dose (B)": True,
+            "Cross-check (A-B)": True,
+        }
+        out_lines = []
+        for line in tail.splitlines(keepends=True):
+            m = re.match(r"^(\s*)(.+?)(\s*:\s*)([-+]?[0-9][0-9.eE+-]*)(.*)$", line)
+            if m:
+                prefix, field, sep, val, rest = m.groups()
+                fname = field.strip()
+                had_nl = line.endswith("\n")
+                body = line[:-1] if had_nl else line
+                if fname == "Number of decays":
+                    new_body = f"{prefix}{field}{sep}{int(n_target)}{rest}"
+                    out_lines.append(new_body + ("\n" if had_nl else ""))
+                    continue
+                if fname in scale_fields:
+                    try:
+                        v = float(val)
+                        nv = v * k
+                        # preserve scientific style roughly
+                        if "e" in val.lower():
+                            new_val = f"{nv:.6e}"
+                        else:
+                            new_val = f"{nv:.6g}"
+                        new_body = f"{prefix}{field}{sep}{new_val}{rest}"
+                        out_lines.append(new_body + ("\n" if had_nl else ""))
+                        continue
+                    except ValueError:
+                        pass
+            out_lines.append(line)
+        new_tail = "".join(out_lines)
+        note = f"\n# Scaled results: K={k:.6f}, target N={n_target}\n"
+        new_text = self._format_result_text(head + new_tail + note)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(new_text)
+
+    def _insert_relative_error_line(self, path):
+        if not (hasattr(self, "output_checkvars") and self.output_checkvars.get("relative_error") is not None and self.output_checkvars["relative_error"].get()):
+            return
+        n_sim = getattr(self, "_sim_total", None)
+        if not n_sim:
+            try:
+                n_sim, _, _ = self._sim_n_and_k()
+            except Exception:
+                n_sim = 1
+        if not n_sim or n_sim < 1:
+            n_sim = 1
+        pct = 100.0 / math.sqrt(n_sim)
+        with open(path, "r", encoding="utf-8") as f:
+            text = f.read()
+        marker = "Energy deposit (A)"
+        idx = text.rfind(marker)
+        if idx < 0:
+            return
+        block_start = text.rfind("===", 0, idx)
+        if block_start < 0:
+            block_start = 0
+        segment = text[block_start:idx]
+        if "Relative error:" in segment:
+            return
+        line = f"Relative error:       {pct:.4g} %\n"
+        text = text[:idx] + line + text[idx:]
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(text)
+
+    def _sig_digits(self):
+        pct = ""
+        if hasattr(self, "rel_error_count_var") and self._decay_mode() == DECAY_MODES[0]:
+            pct = self.rel_error_count_var.get()
+        elif hasattr(self, "rel_error_act_var"):
+            pct = self.rel_error_act_var.get()
+        try:
+            eps = float(str(pct).replace(",", ".")) / 100.0
+        except (ValueError, TypeError):
+            eps = 0.001
+        if eps <= 0:
+            eps = 0.001
+        sd = int(math.ceil(-math.log10(eps))) + 1
+        return max(3, min(sd, 6))
+
+    def _format_result_text(self, txt):
+        sd = self._sig_digits()
+        cross_sd = 3
+        out = []
+        for line in txt.splitlines(keepends=True):
+            m = re.match(r"^(\s*)(.+?)(\s*:\s*)([-+]?[0-9][0-9.eE+-]*)(.*)$", line)
+            if not m:
+                out.append(line)
+                continue
+            prefix, field, sep, val, rest = m.groups()
+            fname = field.strip()
+            if fname == "Number of decays":
+                out.append(line)
+                continue
+            try:
+                v = float(val)
+            except ValueError:
+                out.append(line)
+                continue
+            use_sd = cross_sd if "cross" in fname.lower() else sd
+            had_nl = line.endswith("\n")
+            new_val = f"{v:.{use_sd}g}"
+            new_body = f"{prefix}{field}{sep}{new_val}{rest}"
+            out.append(new_body + ("\n" if had_nl else ""))
+        return "".join(out)
+
+    def _compose_result_block(self):
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        raw_path = os.path.join(script_dir, "run_result.txt")
+        raw = {}
+        if os.path.isfile(raw_path):
+            with open(raw_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.rstrip("\n")
+                    if not line.strip() or ":" not in line:
+                        continue
+                    key, val = line.split(":", 1)
+                    raw[key.strip()] = val.strip()
+
+        try:
+            n_sim = int(float(raw.get("Number of decays", "1").split()[0]))
+        except (ValueError, TypeError):
+            n_sim = 1
+        if n_sim < 1:
+            n_sim = 1
+        n_target = getattr(self, "_target_n", None)
+        if not n_target:
+            n_target = n_sim
+        k = (n_target / n_sim) if n_sim > 0 else 1.0
+        self._scale_factor = k
+        self._target_n = n_target
+        self._sim_total = n_sim
+
+        def cb(fid):
+            v = self.output_checkvars.get(fid)
+            return (v.get() if v is not None else True)
+
+        pairs = []
+        ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        if cb("timestamp"):
+            pairs.append(("Дата и время:           ", ts))
+
+        if cb("radionuclide"):
+            idx_rn = self.rn_combo.current()
+            if idx_rn <= 0:
+                rn_label = f'Custom (Z={self.custom_rn_z.get()}, A={self.custom_rn_a.get()})'
+            else:
+                r = RADIONUCLIDES[idx_rn - 1]
+                rn_label = f'{r["name"]} (Z={r["Z"]}, A={r["A"]})'
+            pairs.append(("Радионуклид:            ", rn_label))
+
+        if cb("num_events"):
+            pairs.append(("Число распадов:         ", str(n_target)))
+
+        if cb("activity"):
+            pairs.append(("Активность источника:   ", f'{self.activity_var.get()} {self.activity_unit_var.get()}'))
+
+        if cb("irr_time"):
+            pairs.append(("Время самооблучения:     ", f'{self.irrtime_var.get()} {self.irrtime_unit_var.get()}'))
+
+        if cb("geometry_variant"):
+            pairs.append(("Вариант геометрии:      ", self._geometry_label()))
+
+        if cb("dimensions"):
+            r_cm = to_cm(self.diameter_var.get(), self.diameter_unit.get())
+            r_cm = (r_cm / 2.0) if r_cm is not None else None
+            h_cm = to_cm(self.height_var.get(), self.height_unit.get())
+            if r_cm is not None:
+                pairs.append(("Радиус цилиндра:       ", f"{r_cm:.4g} см"))
+            if h_cm is not None:
+                pairs.append(("Высота цилиндра:       ", f"{h_cm:.4g} см"))
+
+        if cb("volume"):
+            pairs.append(("Объём:                 ", f'{self.volume_var.get()} см3'))
+
+        idx_mat = self.material_combo.current()
+        if idx_mat <= 0:
+            mat_name = self.custom_mat_name.get().strip() or "custom"
+            mat_density = self.custom_mat_density.get().strip()
+        else:
+            mat_name = MATERIALS[idx_mat - 1]["name"]
+            mat_density = MATERIALS[idx_mat - 1]["density"].split()[0]
+        if cb("material_name"):
+            pairs.append(("Материал:              ", mat_name))
+        if cb("material_density"):
+            pairs.append(("Плотность материала:    ", f"{mat_density} г/см3"))
+
+        if cb("mass"):
+            try:
+                v = float(self.volume_var.get())
+                d = float(mat_density)
+                mass = v * d
+                pairs.append(("Масса материала:       ", f"{mass:.4g} г"))
+            except (ValueError, TypeError):
+                pass
+
+        shell = self._geometry_token() != "cylinder"
+        if shell:
+            if cb("wall_thickness"):
+                w_cm = to_cm(self.wall_var.get(), self.wall_unit.get())
+                pairs.append(("Толщина стенки:        ", f"{w_cm:.4g} см" if w_cm is not None else self.wall_var.get()))
+            if cb("rim"):
+                rim_cm = to_cm(self.rim_var.get(), self.rim_unit.get())
+                pairs.append(("Сухой бортик:           ", f"{rim_cm:.4g} см" if rim_cm is not None else self.rim_var.get()))
+            if cb("glass_material"):
+                idx_g = self.glass_material_combo.current()
+                if idx_g <= 0:
+                    gm = self.custom_glass_name.get().strip() or "custom"
+                else:
+                    gm = GLASS_MATERIALS[idx_g - 1]["name"]
+                pairs.append(("Материал стекла:       ", gm))
+
+        scale_keys = {"Energy deposit (A)", "Absorbed dose (A)", "Decay energy (B)", "Escaped energy (B)", "Transferred (B)", "Absorbed dose (B)", "Cross-check (A-B)"}
+        raw_to_field = {
+            "Energy deposit (A)": "edep_energy",
+            "Absorbed dose (A)": "edep_dose",
+            "Decay energy (B)": "decay_energy",
+            "Escaped energy (B)": "escaped_energy",
+            "Transferred (B)": "transferred_energy",
+            "Absorbed dose (B)": "path_b_dose",
+            "Cross-check (A-B)": "cross_check",
+            "Energy per decay": "energy_per_decay",
+        }
+        raw_labels_ru = {
+            "Energy deposit (A)": "Поглощённая энергия (A):",
+            "Absorbed dose (A)": "Поглощённая доза (A):",
+            "Decay energy (B)": "Энергия распада (B):",
+            "Escaped energy (B)": "Убежавшая энергия (B):",
+            "Transferred (B)": "Переданная энергия (B):",
+            "Absorbed dose (B)": "Поглощённая доза (B):",
+            "Cross-check (A-B)": "Cross-check A-B (Гр):",
+            "Energy per decay": "Энергия на распад:",
+        }
+
+        result_pairs = []
+        scale = getattr(self, "scale_enabled_var", None) and self.scale_enabled_var.get()
+        rel_enabled = cb("relative_error") and bool(scale)
+        rel_pct = 100.0 / math.sqrt(n_sim) if n_sim > 0 else 0.0
+        if rel_enabled:
+            result_pairs.append(("Относительная погрешность:", f"{rel_pct:.4g} %"))
+
+        for key, fid in raw_to_field.items():
+            if key not in raw:
+                continue
+            if not cb(fid):
+                continue
+            val = raw[key]
+            if key == "Number of decays":
+                val = str(n_target)
+            elif key == "Cross-check (A-B)":
+                try:
+                    num = float(val.split()[0])
+                    new_num = (num * k)
+                    # convert MeV -> Gy using mass
+                    idx_mat = self.material_combo.current()
+                    if idx_mat <= 0:
+                        mat_density = float(self.custom_mat_density.get())
+                    else:
+                        mat_density = float(MATERIALS[idx_mat - 1]["density"].split()[0])
+                    v = float(self.volume_var.get())
+                    mass = v * mat_density
+                    if mass > 0:
+                        new_num = new_num / mass
+                    val = f"{new_num:.4g} Гр"
+                except (ValueError, TypeError):
+                    pass
+            elif key in scale_keys:
+                try:
+                    num = float(val.split()[0])
+                    new_num = num * k
+                    unit = val.split()[-1] if len(val.split()) > 1 else ""
+                    unit_ru = {"MeV": "МэВ", "Gy": "Гр", "cm3": "см3", "g": "г", "s": "с", "ms": "мс", "Bq": "Бк", "cm": "см"}.get(unit, unit)
+                    val = (f"{new_num:.4g} " + unit_ru).strip()
+                except (ValueError, TypeError):
+                    pass
+            label = raw_labels_ru.get(key, key + ":")
+            result_pairs.append((label, val))
+
+        nt = self.num_threads_var.get()
+        try:
+            nt_int = int(nt)
+        except (ValueError, TypeError):
+            nt_int = 0
+        if cb("threading_mode"):
+            mode = "Многопоточный" if nt_int != 1 else "Однопоточный"
+            pairs.append(("Режим потоков:         ", mode))
+        if cb("num_threads"):
+            nt_show = nt if nt and nt != "0" else raw.get("Number of threads", nt)
+            pairs.append(("Число потоков:         ", nt_show))
+        if cb("sim_wall_time") and "Wall time" in raw:
+            pairs.append(("Время симуляции:       ", raw["Wall time"].replace("s", "с").replace("ms", "мс")))
+        if cb("avg_time_per_event") and "Avg time per event" in raw:
+            pairs.append(("Среднее время/событие:  ", raw["Avg time per event"].replace("ms", "мс")))
+
+        out = []
+        out.append("=== Run @ " + ts + " ===\n")
+        all_labels = [l.strip() for l, _ in pairs] + [l.strip() for l, _ in result_pairs]
+        maxw = max((len(l) for l in all_labels), default=0)
+        for label, value in pairs:
+            out.append(f"{label.strip().ljust(maxw+2)}{value}\n")
+        if result_pairs:
+            out.append("=== Результаты симуляции ===\n")
+            for label, value in result_pairs:
+                out.append(f"{label.strip().ljust(maxw+2)}{value}\n")
+        out.append("\n")
+        return "".join(out)
+
     def _show_results(self, txt):
+        txt = self._format_result_text(txt)
         self.result_text.delete("1.0", "end")
-        self.result_text.insert("1.0", self._reverse_result_blocks(txt))
+        self.result_text.insert("1.0", txt)
 
     def _read_result(self):
         script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -1894,8 +2303,8 @@ class ProgramB(tk.Tk):
         with open(os.path.join(script_dir, "run.mac"), "w", encoding="utf-8") as f:
             f.write(text)
         try:
-            n_eff, _ = self._effective_decays()
-            self._sim_total = n_eff
+            n_sim, _, _ = self._sim_n_and_k()
+            self._sim_total = n_sim
         except Exception:
             self._sim_total = 1
         exe = None
@@ -2028,10 +2437,19 @@ class ProgramB(tk.Tk):
         self.progress_bar["value"] = 100.0
         self.progress_label.config(text="Симуляция завершена.")
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        path = os.path.join(script_dir, "results.txt")
-        if os.path.isfile(path):
-            with open(path, "r", encoding="utf-8") as f:
-                self._show_results(f.read())
+        results_path = os.path.join(script_dir, "results.txt")
+        try:
+            block = self._compose_result_block()
+        except Exception as e:
+            block = f"# Error composing result block: {e}\n"
+        old = ""
+        if os.path.isfile(results_path):
+            with open(results_path, "r", encoding="utf-8") as f:
+                old = f.read()
+        with open(results_path, "w", encoding="utf-8") as f:
+            f.write(block + old)
+        with open(results_path, "r", encoding="utf-8") as f:
+            self._show_results(f.read())
         if code == 0 and getattr(self, "spectrum_var", None) is not None and self.spectrum_var.get():
             try:
                 self.notebook.select(self.page_spectra)
