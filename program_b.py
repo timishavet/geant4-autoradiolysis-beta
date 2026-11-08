@@ -115,6 +115,7 @@ def format_number(value):
 # ============================================================
 
 NMAX_EVENTS = 2147483647
+REL_ERROR_MIN_PERCENT = 0.0025
 ACTIVITY_UNITS = {"Бк":1.0, "кБк":1e3, "МБк":1e6, "ГБк":1e9, "мКи":3.7e7, "Ки":3.7e10}
 TIME_UNITS = {"с":1.0, "мин":60.0, "ч":3600.0, "сут":86400.0}
 DECAY_MODES = ["По числу распадов", "По активности и времени"]
@@ -599,8 +600,19 @@ class ProgramB(tk.Tk):
         self.decay_count_var = tk.StringVar(value="1000000")
         ttk.Entry(self.count_frame, textvariable=self.decay_count_var).grid(row=0, column=1, sticky="ew", padx=4, pady=4)
         ttk.Label(self.count_frame, text="Программа выполнит ровно N событий: /run/beamOn N").grid(row=1, column=0, columnspan=2, sticky="w", padx=4, pady=4)
+
+        relf = ttk.Frame(self.count_frame)
+        relf.grid(row=2, column=0, columnspan=2, sticky="ew", padx=4, pady=(4, 0))
+        ttk.Label(relf, text="Относительная погрешность, %").pack(side="left", padx=(0, 8))
+        self.rel_error_count_var = tk.StringVar(value="")
+        ttk.Entry(relf, textvariable=self.rel_error_count_var, width=10).pack(side="left")
+        ttk.Label(relf, text="(минимум 0,0025 %; ε = 1/√N)").pack(side="left", padx=(8, 0))
+
+        self.rel_error_count_info_var = tk.StringVar(value="")
+        ttk.Label(self.count_frame, textvariable=self.rel_error_count_info_var, wraplength=600, justify="left", style="Mono.TLabel").grid(row=3, column=0, columnspan=2, sticky="w", padx=4, pady=4)
+
         self.count_warn_var = tk.StringVar(value="")
-        ttk.Label(self.count_frame, textvariable=self.count_warn_var, foreground="#B00020", wraplength=600, justify="left").grid(row=2, column=0, columnspan=2, sticky="w", padx=4, pady=4)
+        ttk.Label(self.count_frame, textvariable=self.count_warn_var, foreground="#B00020", wraplength=600, justify="left").grid(row=4, column=0, columnspan=2, sticky="w", padx=4, pady=4)
         self.count_frame.columnconfigure(1, weight=1)
 
         self.act_frame = ttk.LabelFrame(f, text="По активности и времени")
@@ -635,15 +647,30 @@ class ProgramB(tk.Tk):
         ttk.Label(self.act_frame, textvariable=self.decay_computed_var, wraplength=600, justify="left", style="Mono.TLabel").grid(row=2, column=0, columnspan=2, sticky="w", padx=4, pady=4)
         self.act_halflife_var = tk.StringVar(value="T1/2: —")
         ttk.Label(self.act_frame, textvariable=self.act_halflife_var, wraplength=600, justify="left", style="Mono.TLabel").grid(row=3, column=0, columnspan=2, sticky="w", padx=4, pady=4)
+
+        relf2 = ttk.Frame(self.act_frame)
+        relf2.grid(row=4, column=0, columnspan=2, sticky="ew", padx=4, pady=(4, 0))
+        ttk.Label(relf2, text="Относительная погрешность, %").pack(side="left", padx=(0, 8))
+        self.rel_error_act_var = tk.StringVar(value="")
+        ttk.Entry(relf2, textvariable=self.rel_error_act_var, width=10).pack(side="left")
+        ttk.Label(relf2, text="(минимум 0,0025 %)").pack(side="left", padx=(8, 0))
+
+        self.rel_error_act_info_var = tk.StringVar(value="")
+        ttk.Label(self.act_frame, textvariable=self.rel_error_act_info_var, wraplength=600, justify="left", style="Mono.TLabel").grid(row=5, column=0, columnspan=2, sticky="w", padx=4, pady=4)
+
         self.act_warn_var = tk.StringVar(value="")
-        ttk.Label(self.act_frame, textvariable=self.act_warn_var, foreground="#B00020", wraplength=600, justify="left").grid(row=4, column=0, columnspan=2, sticky="w", padx=4, pady=4)
-        ttk.Label(self.act_frame, text="Число событий N вычисляется с учетом распада источника за время облучения.", wraplength=600, justify="left").grid(row=5, column=0, columnspan=2, sticky="w", padx=4, pady=4)
+        ttk.Label(self.act_frame, textvariable=self.act_warn_var, foreground="#B00020", wraplength=600, justify="left").grid(row=6, column=0, columnspan=2, sticky="w", padx=4, pady=4)
+        ttk.Label(self.act_frame, text="Число событий N вычисляется с учетом распада источника за время облучения.", wraplength=600, justify="left").grid(row=7, column=0, columnspan=2, sticky="w", padx=4, pady=4)
 
         self.decay_count_var.trace_add("write", lambda *_: (self._update_decay_warnings(), self._refresh_macro_preview()))
         self.activity_var.trace_add("write", lambda *_: (self._update_decay_warnings(), self._refresh_macro_preview()))
         self.irrtime_var.trace_add("write", lambda *_: (self._update_decay_warnings(), self._refresh_macro_preview()))
         self.activity_unit_combo.bind("<<ComboboxSelected>>", lambda _: (self._update_decay_warnings(), self._refresh_macro_preview()))
         self.irrtime_unit_combo.bind("<<ComboboxSelected>>", lambda _: (self._update_decay_warnings(), self._refresh_macro_preview()))
+        if hasattr(self, "rel_error_count_var"):
+            self.rel_error_count_var.trace_add("write", lambda *_: (self._update_rel_error_count(), self._refresh_macro_preview()))
+        if hasattr(self, "rel_error_act_var"):
+            self.rel_error_act_var.trace_add("write", lambda *_: (self._update_rel_error_act(), self._refresh_macro_preview()))
 
     # --- ПОЛУЧАЕМЫЕ ЗНАЧЕНИЯ ---
     def _build_output_page(self):
@@ -1236,6 +1263,87 @@ class ProgramB(tk.Tk):
         else:
             self.act_warn_var.set("")
 
+    def _rel_error_to_n(self, pct_str):
+        try:
+            pct = float(str(pct_str).replace(",", "."))
+        except (ValueError, TypeError):
+            return None
+        if pct < REL_ERROR_MIN_PERCENT:
+            return None
+        if pct > 100:
+            return None
+        eps = pct / 100.0
+        if eps <= 0:
+            return None
+        n = int(round(1.0 / (eps * eps)))
+        if n < 1:
+            n = 1
+        return n
+
+    def _update_rel_error_count(self):
+        if not hasattr(self, "rel_error_count_info_var"):
+            return
+        n_req = self._rel_error_to_n(self.rel_error_count_var.get())
+        if n_req is None:
+            self.rel_error_count_info_var.set("")
+            # validate minimum
+            try:
+                pct = float(str(self.rel_error_count_var.get()).replace(",", "."))
+            except (ValueError, TypeError):
+                pct = None
+            if pct is not None and pct < REL_ERROR_MIN_PERCENT:
+                self.rel_error_count_info_var.set(f"Минимум {REL_ERROR_MIN_PERCENT} %.")
+            return
+        n_sim = min(n_req, NMAX_EVENTS)
+        k = (n_req / n_sim) if n_sim > 0 else 1.0
+        ach_pct = 100.0 / math.sqrt(n_sim) if n_sim > 0 else 0.0
+        # update decay count if changed
+        if self.decay_count_var.get() != str(n_sim):
+            self.decay_count_var.set(str(n_sim))
+        lines = [f"N_треб = {n_req:,}".replace(",", " "),
+                 f"N_сим   = {n_sim:,}".replace(",", " "),
+                 f"K       = {k:.4f}",
+                 f"Достигнутая погрешность: {ach_pct:.4f} %"]
+        if n_req > NMAX_EVENTS:
+            lines.append("Требуемое N превышает лимит Geant4 — примените K к результатам (доза, энергия).")
+        self.rel_error_count_info_var.set("\n".join(lines))
+
+    def _update_rel_error_act(self):
+        if not hasattr(self, "rel_error_act_info_var"):
+            return
+        n_req = self._rel_error_to_n(self.rel_error_act_var.get())
+        if n_req is None:
+            self.rel_error_act_info_var.set("")
+            try:
+                pct = float(str(self.rel_error_act_var.get()).replace(",", "."))
+            except (ValueError, TypeError):
+                pct = None
+            if pct is not None and pct < REL_ERROR_MIN_PERCENT:
+                self.rel_error_act_info_var.set(f"Минимум {REL_ERROR_MIN_PERCENT} %.")
+            return
+        raw = self._raw_activity_n()
+        if raw is None:
+            self.rel_error_act_info_var.set(f"N_треб = {n_req:,}".replace(",", " ") + "\nУкажите активность и время для расчёта N.")
+            return
+        n_fact, hl, err = raw
+        if err is not None or n_fact is None:
+            self.rel_error_act_info_var.set(f"N_треб = {n_req:,}".replace(",", " ") + "\n" + (err or "Нет данных"))
+            return
+        if n_fact < 1:
+            self.rel_error_act_info_var.set(f"N_треб = {n_req:,}".replace(",", " ") + "\nN < 1: увеличьте активность или время.")
+            return
+        k = (n_req / n_fact) if n_fact > 0 and n_req > n_fact else 1.0
+        ach_pct = 100.0 / math.sqrt(n_fact) if n_fact > 0 else 0.0
+        lines = [f"N_треб = {n_req:,}".replace(",", " "),
+                 f"N_факт = {n_fact:,}".replace(",", " "),
+                 f"K       = {k:.4f}",
+                 f"Достигнутая погрешность: {ach_pct:.4f} %"]
+        if n_fact < n_req:
+            lines.append("N меньше требуемого: увеличьте активность/время или примите большую погрешность.")
+        elif k > 1.0:
+            lines.append("Примените K к результатам (доза, энергия).")
+        self.rel_error_act_info_var.set("\n".join(lines))
+
     def _raw_activity_n(self):
         if self._decay_mode() == DECAY_MODES[0]:
             return None
@@ -1626,7 +1734,9 @@ class ProgramB(tk.Tk):
                       "activity": self.activity_var.get() if hasattr(self, "activity_var") else "1",
                       "activityUnit": self.activity_unit_var.get() if hasattr(self, "activity_unit_var") else "МБк",
                       "irrTime": self.irrtime_var.get() if hasattr(self, "irrtime_var") else "1",
-                      "irrTimeUnit": self.irrtime_unit_var.get() if hasattr(self, "irrtime_unit_var") else "ч"},
+                      "irrTimeUnit": self.irrtime_unit_var.get() if hasattr(self, "irrtime_unit_var") else "ч",
+                      "relErrorCount": self.rel_error_count_var.get() if hasattr(self, "rel_error_count_var") else "",
+                      "relErrorAct": self.rel_error_act_var.get() if hasattr(self, "rel_error_act_var") else ""},
             "output": {fid: var.get() for fid, var in self.output_checkvars.items()},
             "rdmThreshold": True,
             "spectrumEnabled": self.spectrum_var.get() if hasattr(self, "spectrum_var") else False,
@@ -1705,6 +1815,10 @@ class ProgramB(tk.Tk):
             self.irrtime_var.set(decay.get("irrTime", "1"))
             tu = decay.get("irrTimeUnit", "ч")
             self.irrtime_unit_var.set(tu if tu in TIME_UNITS else "ч")
+        if hasattr(self, "rel_error_count_var"):
+            self.rel_error_count_var.set(decay.get("relErrorCount", ""))
+        if hasattr(self, "rel_error_act_var"):
+            self.rel_error_act_var.set(decay.get("relErrorAct", ""))
         self._update_decay_visibility()
 
         output = s.get("output", {})
