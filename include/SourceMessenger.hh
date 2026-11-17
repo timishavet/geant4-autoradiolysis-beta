@@ -8,8 +8,7 @@ class G4UIcmdWithADoubleAndUnit;
 class G4UIdirectory;
 
 /// /mySource/* UI commands for runtime source configuration before
-/// /run/initialize: radionuclide (by Z, A, optional excitation) and
-/// source activity (informational; recorded in results output).
+/// /run/initialize: radionuclide (by Z, A, optional excitation).
 class SourceMessenger : public G4UImessenger
 {
 public:
@@ -21,8 +20,6 @@ public:
 private:
     G4UIdirectory*             fDir;
     G4UIcommand*               fSetRadionuclideCmd;  // Z A [excitation_keV]
-    G4UIcmdWithADoubleAndUnit* fSetActivityCmd;
-    G4UIcmdWithADoubleAndUnit* fSetIrrTimeCmd;
 };
 
 #endif

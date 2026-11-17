@@ -24,18 +24,18 @@ TrackingAction::TrackingAction(EventAction* eventAction)
 {}
 
 namespace {
-/// Returns true if the given WORLD position lies inside the cylinder volume.
+/// Returns true if the given WORLD position lies inside the sensitive volume.
 /// We resolve this by looking up the cylinder's logical volume and
 /// checking its solid. The solid is defined in the container construction
 /// frame, so the world position is first mapped back to that frame
 /// (the whole container is rotated by DetectorConfig::ContainerRotation()).
 /// This avoids relying on the touchable hierarchy of the freshly created
 /// track (which may not be set up yet).
-G4bool IsInsideCylinder(const G4ThreeVector& pos)
+G4bool IsInsideSensitiveVolume(const G4ThreeVector& pos)
 {
-    G4LogicalVolume* cylLV = G4LogicalVolumeStore::GetInstance()->GetVolume("Cylinder");
-    if (!cylLV) return false;
-    return cylLV->GetSolid()->Inside(
+    G4LogicalVolume* volLV = G4LogicalVolumeStore::GetInstance()->GetVolume("SensitiveVolume");
+    if (!volLV) return false;
+    return volLV->GetSolid()->Inside(
         DetectorConfig::WorldToContainerLocal(pos));
 }
 } // namespace
@@ -105,7 +105,7 @@ void TrackingAction::PreUserTrackingAction(const G4Track* track)
     if (processName != "RadioactiveDecay" && processName != "annihil") return;
 
     // Only energy injected inside the cylinder belongs to Path B.
-    if (!IsInsideCylinder(track->GetPosition())) return;
+    if (!IsInsideSensitiveVolume(track->GetPosition())) return;
 
     fEventAction->AddDecayEnergy(track->GetKineticEnergy());
 }

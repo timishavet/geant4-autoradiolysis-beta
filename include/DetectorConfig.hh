@@ -18,7 +18,8 @@ class DetectorConfig
 {
 public:
     enum class GeometryType {
-        Cylinder,  // plain water cylinder, no shell
+        Cylinder,  // plain cylinder of medium, no shell
+        Sphere,    // plain sphere of medium, no shell
         Beaker,    // cylinder of medium inside an open cylindrical glass
         Tube       // cylinder + hemisphere (rounded bottom) inside glass
     };

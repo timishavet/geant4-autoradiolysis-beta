@@ -16,14 +16,14 @@ DetectorMessenger::DetectorMessenger(DetectorConstruction* detector)
 {
     fDir->SetGuidance(
         "Commands to set the container geometry before /run/initialize.\n"
-        "Variants: cylinder (plain), beaker (open glass cup), tube (test tube\n"
-        "with rounded bottom). The liquid (sensitive) volume is the medium;\n"
-        "the glass shell is never sensitive. The hemisphere of the tube is\n"
-        "always filled; 'rim' extends the empty (dry) cylindrical wall above\n"
-        "the liquid level.");
+        "Variants: cylinder (plain), sphere (plain), beaker (open glass cup),\n"
+        "tube (test tube with rounded bottom). The medium (sensitive) volume\n"
+        "is the sensitive volume; the glass shell is never sensitive. The\n"
+        "hemisphere of the tube is always filled; 'rim' extends the empty\n"
+        "(dry) cylindrical wall above the liquid level.");
 
     fGeometryCmd = new G4UIcmdWithAString("/myDetector/setGeometry", this);
-    fGeometryCmd->SetGuidance("Set geometry variant: cylinder | beaker | tube");
+    fGeometryCmd->SetGuidance("Set geometry variant: cylinder | sphere | beaker | tube");
     fGeometryCmd->SetGuidance("Example: /myDetector/setGeometry tube");
     fGeometryCmd->SetParameterName("geometry", false);
     fGeometryCmd->AvailableForStates(G4State_PreInit);

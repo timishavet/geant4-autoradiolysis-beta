@@ -30,13 +30,15 @@ void DetectorConfig::SetGeometry(const G4String& name)
     G4String n = G4String(name).strip();
     if (n == "cylinder" || n == "plain") {
         fGeometryType = GeometryType::Cylinder;
+    } else if (n == "sphere") {
+        fGeometryType = GeometryType::Sphere;
     } else if (n == "beaker") {
         fGeometryType = GeometryType::Beaker;
     } else if (n == "tube") {
         fGeometryType = GeometryType::Tube;
     } else {
         G4cerr << "Warning: unknown geometry type '" << name
-               << "' (expected cylinder|beaker|tube). Ignored." << G4endl;
+               << "' (expected cylinder|sphere|beaker|tube). Ignored." << G4endl;
         return;
     }
     G4cout << "Geometry type set to: " << GetGeometryName() << G4endl;
@@ -46,6 +48,7 @@ G4String DetectorConfig::GetGeometryName() const
 {
     switch (fGeometryType) {
         case GeometryType::Cylinder: return "cylinder";
+        case GeometryType::Sphere:   return "sphere";
         case GeometryType::Beaker:   return "beaker";
         case GeometryType::Tube:     return "tube";
     }
@@ -72,17 +75,17 @@ void DetectorConfig::SetMaterial(const G4String& name)
         return;
     }
     fMaterialName = name;
-    G4cout << "Cylinder material set to: " << name << G4endl;
+    G4cout << "Medium material set to: " << name << G4endl;
 }
 
 void DetectorConfig::SetCustomDensity(G4double density)
 {
     fCustomDensity = density;
     if (density > 0.0) {
-        G4cout << "Cylinder custom density: " << density / (g / cm3)
+        G4cout << "Medium custom density: " << density / (g / cm3)
                << " g/cm3" << G4endl;
     } else {
-        G4cout << "Cylinder custom density cleared; NIST default used."
+        G4cout << "Medium custom density cleared; NIST default used."
                << G4endl;
     }
 }
@@ -137,7 +140,8 @@ G4double DetectorConfig::GetGlassEffectiveDensity() const
 
 G4double DetectorConfig::GetOuterRadius() const
 {
-    if (fGeometryType == GeometryType::Cylinder) return fRadius;
+    if (fGeometryType == GeometryType::Cylinder ||
+        fGeometryType == GeometryType::Sphere) return fRadius;
     return fRadius + fGlassWall;
 }
 
@@ -146,6 +150,8 @@ G4double DetectorConfig::GetContainerHeight() const
     switch (fGeometryType) {
         case GeometryType::Cylinder:
             return 2.0 * fHalfHeight;
+        case GeometryType::Sphere:
+            return 2.0 * fRadius;
         case GeometryType::Beaker:
             return fGlassWall + 2.0 * fHalfHeight + fRim;
         case GeometryType::Tube:
@@ -157,6 +163,10 @@ G4double DetectorConfig::GetContainerHeight() const
 G4double DetectorConfig::LiquidVolumeCm3() const
 {
     const G4double r = GetRadius();
+    if (fGeometryType == GeometryType::Sphere) {
+        const G4double vSphere = (4.0 / 3.0) * CLHEP::pi * r * r * r;
+        return vSphere / (cm * cm * cm);
+    }
     const G4double h = 2.0 * GetHalfHeight();
     const G4double vCyl = CLHEP::pi * r * r * h;
     if (fGeometryType == GeometryType::Tube) {

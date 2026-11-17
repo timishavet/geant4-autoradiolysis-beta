@@ -12,7 +12,7 @@ class EventAction;
 
 /// Run-level action: creates a MyRun instance per thread, prints and saves
 /// the final dose results at the end of the master run. Which fields are
-/// emitted is controlled by OutputConfig (set via /myOutput/* commands).
+/// emitted: all fields are written to run_result.txt; formatting is done by the GUI.
 class RunAction : public G4UserRunAction
 {
 public:

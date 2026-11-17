@@ -12,6 +12,7 @@ class G4VPhysicalVolume;
 ///
 /// Geometry variants (see DetectorConfig::GeometryType):
 ///   - Cylinder: plain cylinder of medium, no shell.
+///   - Sphere:   plain sphere of medium, no shell.
 ///   - Beaker: medium cylinder inside an open cylindrical glass cup
 ///     (side wall + bottom, both of thickness wall; dry "rim" above the
 ///     liquid is the empty upper extension of the side wall).
@@ -19,7 +20,7 @@ class G4VPhysicalVolume;
 ///     radius, inside a matching glass shell. The hemisphere is always
 ///     filled; the rim extends the cylindrical part above the liquid.
 ///
-/// The liquid volume keeps the logical volume name "Cylinder" so that the
+/// The medium (sensitive) volume keeps the logical volume name "SensitiveVolume" so that the
 /// source sampling (PrimaryGeneratorAction), the leakage checks
 /// (TrackingAction) and the result printing (RunAction) keep working for
 /// all variants. Only the liquid volume is sensitive.

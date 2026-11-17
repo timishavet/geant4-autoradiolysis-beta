@@ -4,6 +4,7 @@
 #
 # Geometry commands must be issued BEFORE /run/initialize
 # (use the "Run -> Initialize" button after configuring geometry).
+# (макросы генерируются program_b.py)
 
 # ========================================
 # 1. FILE MENU
@@ -36,6 +37,7 @@
 
 # --- Variant ---------------------------------------------------------
 /gui/addButton geometry "Variant: Cylinder" "/myDetector/setGeometry cylinder"
+/gui/addButton geometry "Variant: Sphere" "/myDetector/setGeometry sphere"
 /gui/addButton geometry "Variant: Beaker" "/myDetector/setGeometry beaker"
 /gui/addButton geometry "Variant: Test tube" "/myDetector/setGeometry tube"
 

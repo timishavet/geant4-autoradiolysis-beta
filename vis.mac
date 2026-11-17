@@ -2,10 +2,12 @@
 # MACROS ДЛЯ ИНТЕРАКТИВНОГО РЕЖИМА
 # ========================================
 # Геометрия задаётся один раз до /run/initialize
-# (через макрос, сгенерированный program_b.html)
+# (через макрос, сгенерированный program_b.py)
+# Один поток в интерактивном режиме для стабильности визуализации
+/run/numberOfThreads 1
 
 # 1. Открываем визуализатор
-/vis/open
+/vis/open TSG
 
 # 2. Настройка вида
 /vis/viewer/set/viewpointThetaPhi 60 30 deg
@@ -22,7 +24,7 @@
 /vis/scene/endOfEventAction accumulate
 
 # 5. Настройка цвета цилиндра (синий)
-/vis/geometry/set/colour Cylinder 0 0 0 1 1
+/vis/geometry/set/colour SensitiveVolume 0 0 0 1 1
 
 # 6. Обновляем вид
 /vis/viewer/flush
@@ -32,6 +34,6 @@
 /control/alias echo "========================================"
 /control/alias echo "  ИНТЕРАКТИВНЫЙ РЕЖИМ"
 /control/alias echo "  Геометрия задаётся в макросе до /run/initialize"
-/control/alias echo "  Для пакетного запуска используйте program_b.html"
+/control/alias echo "  Для пакетного запуска используйте program_b.py"
 /control/alias echo "  Для запуска: /run/beamOn <число>"
 /control/alias echo "========================================"

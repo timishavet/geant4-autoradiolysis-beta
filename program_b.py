@@ -46,6 +46,7 @@ GEOMETRY_VARIANTS = [
     {"token":"cylinder","label":"Цилиндр"},
     {"token":"beaker",  "label":"Стакан"},
     {"token":"tube",    "label":"Пробирка"},
+    {"token":"sphere",  "label":"Сфера"},
 ]
 
 OUTPUT_FIELDS = [
@@ -364,23 +365,39 @@ class ProgramB(tk.Tk):
         self.geometry_combo.grid(row=0, column=1, sticky="ew", padx=4, pady=4)
         self.geometry_combo.bind("<<ComboboxSelected>>", lambda _: (self._update_geometry(), self._refresh_macro_preview()))
 
-        ttk.Label(lf, text="Высота").grid(row=1, column=0, sticky="w", padx=4, pady=4)
+        self.height_label = ttk.Label(lf, text="Высота")
+        self.height_label.grid(row=1, column=0, sticky="w", padx=4, pady=4)
         hf = ttk.Frame(lf)
         hf.grid(row=1, column=1, sticky="ew", padx=4, pady=4)
+        self.height_frame = hf
         self.height_var = tk.StringVar(value="5.0")
         ttk.Entry(hf, textvariable=self.height_var, width=12).pack(side="left", fill="x", expand=True)
         self.height_unit = ttk.Combobox(hf, values=["мм","см","м"], state="readonly", width=5)
         self.height_unit.set("см")
         self.height_unit.pack(side="left", padx=(4,0))
 
-        ttk.Label(lf, text="Диаметр").grid(row=2, column=0, sticky="w", padx=4, pady=4)
+        self.diameter_label = ttk.Label(lf, text="Диаметр")
+        self.diameter_label.grid(row=2, column=0, sticky="w", padx=4, pady=4)
         rf = ttk.Frame(lf)
         rf.grid(row=2, column=1, sticky="ew", padx=4, pady=4)
+        self.diameter_frame = rf
         self.diameter_var = tk.StringVar(value="1.0")
         ttk.Entry(rf, textvariable=self.diameter_var, width=12).pack(side="left", fill="x", expand=True)
         self.diameter_unit = ttk.Combobox(rf, values=["мм","см","м"], state="readonly", width=5)
         self.diameter_unit.set("см")
         self.diameter_unit.pack(side="left", padx=(4,0))
+
+        self.sphere_frame = ttk.LabelFrame(lf, text="Сфера")
+        self.sphere_frame.grid(row=4, column=0, columnspan=2, sticky="ew", padx=4, pady=8)
+        self.sphere_frame.columnconfigure(1, weight=1)
+        ttk.Label(self.sphere_frame, text="Радиус").grid(row=0, column=0, sticky="w", padx=4, pady=4)
+        srf = ttk.Frame(self.sphere_frame)
+        srf.grid(row=0, column=1, sticky="ew", padx=4, pady=4)
+        self.sphere_radius_var = tk.StringVar(value="2.0")
+        ttk.Entry(srf, textvariable=self.sphere_radius_var, width=12).pack(side="left", fill="x", expand=True)
+        self.sphere_radius_unit = ttk.Combobox(srf, values=["мм","см","м"], state="readonly", width=5)
+        self.sphere_radius_unit.set("см")
+        self.sphere_radius_unit.pack(side="left", padx=(4,0))
 
         self.shell_frame = ttk.LabelFrame(lf, text="Стеклянная оболочка (стакан / пробирка)")
         self.shell_frame.grid(row=3, column=0, columnspan=2, sticky="ew", padx=4, pady=8)
@@ -430,6 +447,8 @@ class ProgramB(tk.Tk):
         self.wall_unit.bind("<<ComboboxSelected>>", lambda _: (self._update_geometry(), self._refresh_macro_preview()))
         self.rim_var.trace_add("write", lambda *_: (self._update_geometry(), self._refresh_macro_preview()))
         self.rim_unit.bind("<<ComboboxSelected>>", lambda _: (self._update_geometry(), self._refresh_macro_preview()))
+        self.sphere_radius_var.trace_add("write", lambda *_: (self._update_geometry(), self._refresh_macro_preview()))
+        self.sphere_radius_unit.bind("<<ComboboxSelected>>", lambda _: (self._update_geometry(), self._refresh_macro_preview()))
 
     # --- СРЕДА ---
     def _build_medium_page(self):
@@ -1005,18 +1024,34 @@ class ProgramB(tk.Tk):
         return GEOMETRY_VARIANTS[idx]["label"]
 
     def _show_shell(self):
-        return self._geometry_token() != "cylinder"
+        return self._geometry_token() in ("beaker", "tube")
 
     def _update_geometry(self):
-        d = to_cm(self.diameter_var.get(), self.diameter_unit.get())
-        h = to_cm(self.height_var.get(), self.height_unit.get())
-        r = (d / 2.0) if d is not None else None
-        v = None
-        if r is not None and h is not None and r > 0 and h > 0:
-            v = math.pi * r * r * h
-            if self._geometry_token() == "tube":
-                v += (2.0 / 3.0) * math.pi * r ** 3
-        self.volume_var.set(f"{v:.4f}" if v is not None else "")
+        token = self._geometry_token()
+        # Показ/скрытие полей в зависимости от формы
+        if token == "sphere":
+            if hasattr(self, "height_label"):
+                self.height_label.grid_remove()
+            if hasattr(self, "height_frame"):
+                self.height_frame.grid_remove()
+            if hasattr(self, "diameter_label"):
+                self.diameter_label.grid_remove()
+            if hasattr(self, "diameter_frame"):
+                self.diameter_frame.grid_remove()
+            if hasattr(self, "sphere_frame"):
+                self.sphere_frame.grid()
+        else:
+            if hasattr(self, "height_label"):
+                self.height_label.grid()
+            if hasattr(self, "height_frame"):
+                self.height_frame.grid()
+            if hasattr(self, "diameter_label"):
+                self.diameter_label.grid()
+            if hasattr(self, "diameter_frame"):
+                self.diameter_frame.grid()
+            if hasattr(self, "sphere_frame"):
+                self.sphere_frame.grid_remove()
+
         shell = self._show_shell()
         if hasattr(self, "shell_frame"):
             if shell:
@@ -1028,6 +1063,22 @@ class ProgramB(tk.Tk):
                 self.glass_frame.grid()
             else:
                 self.glass_frame.grid_remove()
+
+        if token == "sphere":
+            r = to_cm(self.sphere_radius_var.get(), self.sphere_radius_unit.get())
+            v = None
+            if r is not None and r > 0:
+                v = (4.0 / 3.0) * math.pi * r ** 3
+        else:
+            d = to_cm(self.diameter_var.get(), self.diameter_unit.get())
+            h = to_cm(self.height_var.get(), self.height_unit.get())
+            r = (d / 2.0) if d is not None else None
+            v = None
+            if r is not None and h is not None and r > 0 and h > 0:
+                v = math.pi * r * r * h
+                if token == "tube":
+                    v += (2.0 / 3.0) * math.pi * r ** 3
+        self.volume_var.set(f"{v:.4f}" if v is not None else "")
 
     def _update_material_info(self):
         idx = self.material_combo.current()
@@ -1563,13 +1614,20 @@ class ProgramB(tk.Tk):
     # --- MACRO BUILDING ---
 
     def _build_macro(self):
-        diameter_cm = to_cm(self.diameter_var.get(), self.diameter_unit.get())
-        height_cm = to_cm(self.height_var.get(), self.height_unit.get())
-        if diameter_cm is None or diameter_cm <= 0:
-            raise ValueError("Укажите положительный диаметр.")
-        radius_cm = diameter_cm / 2.0
-        if height_cm is None or height_cm <= 0:
-            raise ValueError("Укажите положительную высоту.")
+        token = self._geometry_token()
+        if token == "sphere":
+            radius_cm = to_cm(self.sphere_radius_var.get(), self.sphere_radius_unit.get())
+            if radius_cm is None or radius_cm <= 0:
+                raise ValueError("Укажите положительный радиус сферы.")
+            height_cm = None
+        else:
+            diameter_cm = to_cm(self.diameter_var.get(), self.diameter_unit.get())
+            height_cm = to_cm(self.height_var.get(), self.height_unit.get())
+            if diameter_cm is None or diameter_cm <= 0:
+                raise ValueError("Укажите положительный диаметр.")
+            radius_cm = diameter_cm / 2.0
+            if height_cm is None or height_cm <= 0:
+                raise ValueError("Укажите положительную высоту.")
 
         idx_rn = self.rn_combo.current()
         if idx_rn <= 0:
@@ -1612,7 +1670,7 @@ class ProgramB(tk.Tk):
             mat_name = MATERIALS[idx_mat - 1]["name"]
 
         token = self._geometry_token()
-        shell = token != "cylinder"
+        shell = token in ("beaker", "tube")
         shell_lines = []
         if shell:
             wall_cm = to_cm(self.wall_var.get(), self.wall_unit.get())
@@ -1648,15 +1706,7 @@ class ProgramB(tk.Tk):
         beam_on_n = str(n_sim)
         self._scale_factor = k_scale
         self._target_n = n_target
-        activity_line = ""
-        irrtime_line = ""
-        decay_comment = ""
-        if decay_info.get("mode") == "activity":
-            activity_line = f"/mySource/setActivity {format_number(decay_info['a_bq'])} Bq"
-            irrtime_line = f"/mySource/setIrrTime {format_number(decay_info['t_s'])} s"
-            decay_comment = (f"# Активность: {self.activity_var.get()} {self.activity_unit_var.get()}, "
-                             f"Время: {self.irrtime_var.get()} {self.irrtime_unit_var.get()}, "
-                             f"T1/2: {format_halflife_ru(decay_info['hl'])}")
+        # (activity/irrTime commands removed: they were informational only)
 
         thread_line = ""
         try:
@@ -1696,8 +1746,6 @@ class ProgramB(tk.Tk):
             "# Сгенерировано: program_b.py",
             "# Дата: " + stamp,
         ]
-        if decay_comment:
-            lines.append(decay_comment)
         lines.append(seed_comment)
         if spec_on:
             lines.append("# Спектр: запись beta_minus.txt / beta_plus.txt")
@@ -1708,7 +1756,7 @@ class ProgramB(tk.Tk):
             "",
             f"/myDetector/setGeometry {token}",
             f"/myDetector/setRadius {format_number(radius_cm)} cm",
-            f"/myDetector/setHalfHeight {format_number(height_cm / 2)} cm",
+        ] + ([f"/myDetector/setHalfHeight {format_number(height_cm / 2)} cm"] if token != "sphere" else []) + [
             f"/myDetector/setMaterial {mat_name}",
         ])
         if mat_density_line:
@@ -1718,10 +1766,6 @@ class ProgramB(tk.Tk):
         if rn_exc:
             rn_cmd += f" {format_number(rn_exc)}"
         lines.append(rn_cmd)
-        if activity_line:
-            lines.append(activity_line)
-        if irrtime_line:
-            lines.append(irrtime_line)
         if thread_line:
             lines.append(thread_line)
         lines.extend(spectrum_lines)

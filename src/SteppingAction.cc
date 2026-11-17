@@ -22,7 +22,7 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
     // the first step is processed; each worker thread has its own action
     // instance, so caching the pointer in a member is thread-safe).
     if (!fLiquidLV) {
-        fLiquidLV = G4LogicalVolumeStore::GetInstance()->GetVolume("Cylinder");
+        fLiquidLV = G4LogicalVolumeStore::GetInstance()->GetVolume("SensitiveVolume");
         if (!fLiquidLV) return;
     }
 

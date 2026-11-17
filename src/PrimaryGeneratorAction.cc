@@ -124,14 +124,15 @@ void PrimaryGeneratorAction::GeneratePrimaries(G4Event* event)
     }
 
     // Sample the primary uniformly over the whole liquid (sensitive)
-    // volume. The liquid always keeps the logical volume name "Cylinder"
+    // volume. The medium always keeps the logical volume name "SensitiveVolume"
     // regardless of the geometry variant; for the "tube" variant its solid
-    // is a union of a cylinder and a hemisphere. Rejection sampling over
-    // the solid's bounding box works for every variant. The bounding box
-    // and Inside() check are in the container construction frame; the
-    // world position is obtained by applying the container rotation.
+    // is a union of a cylinder and a hemisphere, for the "sphere" variant it
+    // is a sphere. Rejection sampling over the solid's bounding box works
+    // for every variant. The bounding box and Inside() check are in the
+    // container construction frame; the world position is obtained by
+    // applying the container rotation.
     G4double x0 = 0.0, y0 = 0.0, z0 = 0.0;   // fallback: axis centre
-    if (G4LogicalVolume* liqLV = G4LogicalVolumeStore::GetInstance()->GetVolume("Cylinder")) {
+    if (G4LogicalVolume* liqLV = G4LogicalVolumeStore::GetInstance()->GetVolume("SensitiveVolume")) {
         G4ThreeVector pMin, pMax;
         liqLV->GetSolid()->BoundingLimits(pMin, pMax);
         z0 = (pMin.z() + pMax.z()) / 2.0;

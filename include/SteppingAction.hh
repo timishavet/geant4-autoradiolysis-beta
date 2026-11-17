@@ -10,7 +10,7 @@ class EventAction;
 /// Per-step action: boundary-flow bookkeeping for Path B.
 ///
 /// For every step whose pre- and post-step points lie in different
-/// logical volumes relative to the liquid ("Cylinder"):
+/// logical volumes relative to the liquid ("SensitiveVolume"):
 ///  - step leaving the liquid  -> outflow  += post-step kinetic energy;
 ///  - step entering the liquid -> inflow   += post-step kinetic energy.
 ///

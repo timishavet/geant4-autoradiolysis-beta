@@ -131,7 +131,8 @@ G4VPhysicalVolume* DetectorConstruction::Construct()
     const G4double rim  = cfg.GetRim();
 
     const auto geoType = cfg.GetGeometryType();
-    const bool hasGlass = (geoType != DetectorConfig::GeometryType::Cylinder);
+    const bool hasGlass = (geoType == DetectorConfig::GeometryType::Beaker ||
+                          geoType == DetectorConfig::GeometryType::Tube);
 
     // Rotate the whole container so its construction-frame +Z points along
     // world +Y (stands upright for the visualizer). Every placement below
@@ -166,10 +167,10 @@ G4VPhysicalVolume* DetectorConstruction::Construct()
                                        90.*deg, 90.*deg);
         auto* cylSolid  = new G4Tubs("LiquidCyl", 0., R, Hh, 0., 360.*deg);
         auto* unionSolid = new G4UnionSolid(
-            "Cylinder", hemiSolid, cylSolid,
+            "SensitiveVolume", hemiSolid, cylSolid,
             G4Transform3D(G4RotationMatrix(), G4ThreeVector(0., 0., Hh)));
-        liquidLV = new G4LogicalVolume(unionSolid, liquidMat, "Cylinder");
-        new G4PVPlacement(containerRot, G4ThreeVector(), liquidLV, "Cylinder",
+        liquidLV = new G4LogicalVolume(unionSolid, liquidMat, "SensitiveVolume");
+        new G4PVPlacement(containerRot, G4ThreeVector(), liquidLV, "SensitiveVolume",
                           logicWorld, false, 0);
 
         if (glassMat) {
@@ -194,12 +195,21 @@ G4VPhysicalVolume* DetectorConstruction::Construct()
                 new G4VisAttributes(G4Colour(0.7, 0.75, 0.8, 0.4)));
         }
     } else {
-        // Plain cylinder (no glass) or beaker: liquid is a single cylinder
-        // centered at the origin in both cases.
-        auto* solidCylinder = new G4Tubs("Cylinder", 0., R, Hh, 0., 360.*deg);
-        liquidLV = new G4LogicalVolume(solidCylinder, liquidMat, "Cylinder");
-        new G4PVPlacement(containerRot, G4ThreeVector(), liquidLV, "Cylinder",
-                          logicWorld, false, 0);
+        if (geoType == DetectorConfig::GeometryType::Sphere) {
+            // Sphere: the whole sphere is the medium and the sensitive volume.
+            auto* solidSphere = new G4Sphere("SensitiveVolume", 0., R,
+                                             0., 360.*deg, 0., 180.*deg);
+            liquidLV = new G4LogicalVolume(solidSphere, liquidMat, "SensitiveVolume");
+            new G4PVPlacement(containerRot, G4ThreeVector(), liquidLV, "SensitiveVolume",
+                              logicWorld, false, 0);
+        } else {
+            // Plain cylinder (no glass) or beaker: liquid is a single cylinder
+            // centered at the origin in both cases.
+            auto* solidCylinder = new G4Tubs("SensitiveVolume", 0., R, Hh, 0., 360.*deg);
+            liquidLV = new G4LogicalVolume(solidCylinder, liquidMat, "SensitiveVolume");
+            new G4PVPlacement(containerRot, G4ThreeVector(), liquidLV, "SensitiveVolume",
+                              logicWorld, false, 0);
+        }
 
         if (glassMat) {
             // Side wall: rises from the top of the bottom disk (z = -Hh)
@@ -236,5 +246,5 @@ void DetectorConstruction::ConstructSDandField()
 {
     auto* doseDet = new DoseDetector("WaterDose");
     G4SDManager::GetSDMpointer()->AddNewDetector(doseDet);
-    SetSensitiveDetector("Cylinder", doseDet);
+    SetSensitiveDetector("SensitiveVolume", doseDet);
 }
